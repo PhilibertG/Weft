@@ -38,6 +38,10 @@ impl Index {
         &self.entries
     }
 
+    pub fn into_entries(self) -> Vec<AppEntry> {
+        self.entries
+    }
+
     pub fn len(&self) -> usize {
         self.entries.len()
     }
