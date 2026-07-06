@@ -103,3 +103,19 @@ fn app_provider_maps_entries_to_items() {
     // Bruit : rien.
     assert!(apps.query("zzzzqqqq").is_empty());
 }
+
+#[test]
+fn frecency_lifts_used_apps() {
+    let mut apps = app_provider();
+
+    // Sans historique, le mode parcourir est alphabétique.
+    let before = apps.query("");
+    assert_ne!(before[0].title, "Éditeur de texte");
+
+    // Trois lancements de gedit => il passe en tête du parcourir.
+    for _ in 0..3 {
+        apps.record_activation("desktop:gedit.desktop");
+    }
+    let after = apps.query("");
+    assert_eq!(after[0].title, "Éditeur de texte");
+}
