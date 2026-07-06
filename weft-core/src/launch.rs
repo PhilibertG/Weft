@@ -5,12 +5,13 @@
 
 use std::io;
 use std::os::unix::process::CommandExt;
+use std::path::Path;
 use std::process::{Command, Stdio};
 
-use crate::model::{AppEntry, LaunchSpec};
+use crate::model::LaunchSpec;
 
-pub fn launch(entry: &AppEntry) -> io::Result<()> {
-    match &entry.launch {
+pub fn launch_spec(spec: &LaunchSpec) -> io::Result<()> {
+    match spec {
         LaunchSpec::Exec(argv) => spawn_detached(argv),
         // Le client Steam gère tout (Proton compris). S'il ne tourne pas,
         // la commande `steam` le démarre puis lance le jeu.
@@ -20,6 +21,11 @@ pub fn launch(entry: &AppEntry) -> io::Result<()> {
                 .or_else(|_| spawn_detached(&["xdg-open".to_owned(), url]))
         }
     }
+}
+
+/// Ouvre un fichier/dossier avec l'application par défaut.
+pub fn open_path(path: &Path) -> io::Result<()> {
+    spawn_detached(&["xdg-open".to_owned(), path.display().to_string()])
 }
 
 fn spawn_detached<S: AsRef<str>>(argv: &[S]) -> io::Result<()> {

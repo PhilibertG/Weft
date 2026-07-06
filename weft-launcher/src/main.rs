@@ -12,18 +12,16 @@ use adw::prelude::*;
 use gtk::glib;
 use gtk::pango;
 
-use weft_core::model::{AppEntry, Icon};
-use weft_core::search::Searcher;
-use weft_core::Index;
+use weft_core::model::Icon;
+use weft_core::{Activation, Hit, Registry, ResultItem};
 
 const APP_ID: &str = "dev.weft.Launcher";
 const MAX_RESULTS: usize = 8;
 
 struct State {
-    entries: Vec<AppEntry>,
-    searcher: Searcher,
-    /// Indices (dans `entries`) actuellement affichés, ordre = ListBox.
-    hits: Vec<usize>,
+    registry: Registry,
+    /// Hits actuellement affichés, même ordre que la ListBox.
+    hits: Vec<Hit>,
 }
 
 fn main() -> glib::ExitCode {
@@ -52,8 +50,7 @@ fn activate(app: &adw::Application) {
 
 fn build_ui(app: &adw::Application) {
     let state = Rc::new(RefCell::new(State {
-        entries: Vec::new(),
-        searcher: Searcher::new(),
+        registry: Registry::with_defaults(),
         hits: Vec::new(),
     }));
 
@@ -156,7 +153,7 @@ fn build_ui(app: &adw::Application) {
 /// Re-scanne le système, vide la recherche, montre la fenêtre.
 fn refresh_and_present(window: &gtk::Window) {
     let (state, entry, list) = ui_parts(window);
-    state.borrow_mut().entries = Index::build().into_entries();
+    state.borrow_mut().registry.refresh();
     entry.set_text("");
     refresh_list(&state, &list, "");
     window.present();
@@ -165,24 +162,24 @@ fn refresh_and_present(window: &gtk::Window) {
 
 fn refresh_list(state: &Rc<RefCell<State>>, list: &gtk::ListBox, query: &str) {
     let mut s = state.borrow_mut();
-    let State { entries, searcher, hits } = &mut *s;
-    *hits = searcher.search(entries, query);
+    let State { registry, hits } = &mut *s;
+    *hits = registry.query(query);
     // Requête vide : liste complète scrollable. Sinon, top résultats.
     if !query.is_empty() {
         hits.truncate(MAX_RESULTS);
     }
 
     list.remove_all();
-    for &i in hits.iter() {
-        list.append(&make_row(&entries[i]));
+    for hit in hits.iter() {
+        list.append(&make_row(&hit.item));
     }
     drop(s);
     // Sélection par défaut : premier résultat, prêt pour Entrée.
     list.select_row(list.row_at_index(0).as_ref());
 }
 
-fn make_row(app: &AppEntry) -> gtk::ListBoxRow {
-    let icon = match &app.icon {
+fn make_row(item: &ResultItem) -> gtk::ListBoxRow {
+    let icon = match &item.icon {
         Some(Icon::Named(name)) => gtk::Image::from_icon_name(name),
         Some(Icon::Path(path)) => gtk::Image::from_file(path),
         None => gtk::Image::from_icon_name("application-x-executable-symbolic"),
@@ -190,7 +187,7 @@ fn make_row(app: &AppEntry) -> gtk::ListBoxRow {
     icon.set_pixel_size(32);
 
     let name = gtk::Label::builder()
-        .label(&app.name)
+        .label(&item.title)
         .halign(gtk::Align::Start)
         .ellipsize(pango::EllipsizeMode::End)
         .build();
@@ -199,7 +196,7 @@ fn make_row(app: &AppEntry) -> gtk::ListBoxRow {
     let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
     text.set_valign(gtk::Align::Center);
     text.append(&name);
-    if let Some(desc) = &app.description {
+    if let Some(desc) = &item.subtitle {
         let desc = gtk::Label::builder()
             .label(desc)
             .halign(gtk::Align::Start)
@@ -220,15 +217,20 @@ fn make_row(app: &AppEntry) -> gtk::ListBoxRow {
 }
 
 fn launch_row(state: &Rc<RefCell<State>>, row_index: i32, window: &gtk::ApplicationWindow) {
-    let s = state.borrow();
-    let Some(&entry_idx) = s.hits.get(row_index as usize) else { return };
-    let app = &s.entries[entry_idx];
-    match weft_core::launch::launch(app) {
-        Ok(()) => {
+    let mut s = state.borrow_mut();
+    let State { registry, hits } = &mut *s;
+    let Some(hit) = hits.get(row_index as usize) else { return };
+    match registry.activate(hit) {
+        Ok(Activation::Done) => {
             drop(s);
             window.close(); // hide_on_close => juste caché
         }
-        Err(e) => eprintln!("weft: échec du lancement de « {} » : {e}", app.name),
+        Ok(Activation::CopyRequested(text)) => {
+            window.clipboard().set_text(&text);
+            drop(s);
+            window.close();
+        }
+        Err(e) => eprintln!("weft: échec de « {} » : {e}", hit.item.title),
     }
 }
 
@@ -274,14 +276,12 @@ fn load_css() {
 
 fn debug_list(query: &str) -> glib::ExitCode {
     let start = std::time::Instant::now();
-    let index = Index::build();
+    let mut registry = Registry::with_defaults();
     let scan_time = start.elapsed();
-    let mut searcher = Searcher::new();
-    let hits = searcher.search(index.entries(), query);
-    for &i in hits.iter().take(15) {
-        let e = &index.entries()[i];
-        println!("{:<40} [{:?}]", e.name, e.source);
+    let hits = registry.query(query);
+    for hit in hits.iter().take(15) {
+        println!("{:<40} [{:?}, {}]", hit.item.title, hit.item.tier, hit.item.score);
     }
-    eprintln!("\n{} apps en {scan_time:?}, {} résultats", index.len(), hits.len());
+    eprintln!("\nscan en {scan_time:?}, {} résultats", hits.len());
     glib::ExitCode::SUCCESS
 }

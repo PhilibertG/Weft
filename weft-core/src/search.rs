@@ -28,12 +28,20 @@ impl Searcher {
     }
 
     /// Indices dans `entries`, du meilleur score au moins bon.
-    /// Requête vide => tout, dans l'ordre alphabétique.
     pub fn search(&mut self, entries: &[AppEntry], query: &str) -> Vec<usize> {
+        self.search_scored(entries, query)
+            .into_iter()
+            .map(|(i, _)| i)
+            .collect()
+    }
+
+    /// Comme `search`, avec le score de chaque hit.
+    /// Requête vide => tout, ordre alphabétique, score 0.
+    pub fn search_scored(&mut self, entries: &[AppEntry], query: &str) -> Vec<(usize, u32)> {
         if query.trim().is_empty() {
             let mut all: Vec<usize> = (0..entries.len()).collect();
             all.sort_by_key(|&i| entries[i].name.to_lowercase());
-            return all;
+            return all.into_iter().map(|i| (i, 0)).collect();
         }
 
         let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
@@ -47,7 +55,7 @@ impl Searcher {
             .collect();
         // Score décroissant, ties par nom pour un ordre stable.
         scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| entries[a.1].name.cmp(&entries[b.1].name)));
-        scored.into_iter().map(|(_, i)| i).collect()
+        scored.into_iter().map(|(s, i)| (i, s)).collect()
     }
 
     /// Score d'une entrée : le nom compte plein pot, les mots-clés comptent
