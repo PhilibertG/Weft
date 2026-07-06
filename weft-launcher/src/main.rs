@@ -7,6 +7,9 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use adw::prelude::*;
 use gtk::glib;
@@ -17,6 +20,15 @@ use weft_core::{Activation, Hit, Registry, ResultItem};
 
 const APP_ID: &str = "dev.weft.Launcher";
 const MAX_RESULTS: usize = 8;
+
+/// Debounce du watch : on attend ce silence avant de re-scanner. Généreux
+/// exprès — pendant un téléchargement Steam les manifests sont réécrits en
+/// continu, il ne faut pas reconstruire l'index en boucle.
+const WATCH_QUIET_SECS: u64 = 5;
+
+/// Lancé avec --daemon (autostart de session) : construire l'UI et l'index
+/// sans montrer la fenêtre. Consommé à la première activation.
+static DAEMON_START: AtomicBool = AtomicBool::new(false);
 
 struct State {
     registry: Registry,
@@ -30,8 +42,21 @@ fn main() -> glib::ExitCode {
     if args.get(1).is_some_and(|a| a == "--list") {
         return debug_list(args.get(2).map(String::as_str).unwrap_or(""));
     }
+    if args.get(1).is_some_and(|a| a == "--daemon") {
+        DAEMON_START.store(true, Ordering::SeqCst);
+    }
 
     let app = adw::Application::builder().application_id(APP_ID).build();
+
+    // Un démarrage --daemon alors qu'une instance tourne déjà ne doit PAS
+    // faire surgir sa fenêtre : on sort avant toute activation.
+    if DAEMON_START.load(Ordering::SeqCst) {
+        let _ = app.register(gtk::gio::Cancellable::NONE);
+        if app.is_remote() {
+            return glib::ExitCode::SUCCESS;
+        }
+    }
+
     app.connect_startup(|_| load_css());
     app.connect_activate(activate);
     // GApplication consommerait argv ; on ne lui passe rien.
@@ -39,16 +64,26 @@ fn main() -> glib::ExitCode {
 }
 
 fn activate(app: &adw::Application) {
-    // Deuxième invocation : la fenêtre existe déjà, on la remontre avec un
-    // index rafraîchi (des apps ont pu être (dés)installées entre-temps).
-    if let Some(window) = app.active_window() {
-        refresh_and_present(&window);
+    // Deuxième invocation : la fenêtre existe déjà (peut-être jamais
+    // montrée si démarrage --daemon, donc windows() et pas active_window()),
+    // on la remontre avec un index rafraîchi.
+    if let Some(window) = app.windows().first() {
+        refresh_and_present(window);
         return;
     }
-    build_ui(app);
+    let window = build_ui(app);
+    setup_watch(&window);
+    if DAEMON_START.swap(false, Ordering::SeqCst) {
+        // Autostart de session : index chaud, fenêtre cachée. Le premier
+        // raccourci clavier n'aura plus qu'à présenter.
+        let (state, ..) = ui_parts(window.upcast_ref());
+        state.borrow_mut().registry.refresh();
+    } else {
+        refresh_and_present(window.upcast_ref());
+    }
 }
 
-fn build_ui(app: &adw::Application) {
+fn build_ui(app: &adw::Application) -> gtk::ApplicationWindow {
     let state = Rc::new(RefCell::new(State {
         registry: Registry::with_defaults(),
         hits: Vec::new(),
@@ -147,7 +182,72 @@ fn build_ui(app: &adw::Application) {
         window.set_data("weft-entry", entry);
         window.set_data("weft-list", list);
     }
-    refresh_and_present(window.upcast_ref());
+    window
+}
+
+/// Surveille les répertoires des sources ; après WATCH_QUIET_SECS de
+/// silence suivant un changement, reconstruit l'index en arrière-plan
+/// (installations apt/Flatpak/Steam prises en compte sans redémarrage).
+fn setup_watch(window: &gtk::ApplicationWindow) {
+    use notify::{RecursiveMode, Watcher};
+
+    let dirty = Arc::new(AtomicBool::new(false));
+    let last_event = Arc::new(Mutex::new(Instant::now()));
+
+    let (d, l) = (dirty.clone(), last_event.clone());
+    // Le callback tourne sur le thread de notify : il ne touche à rien de
+    // GTK, il pose juste un drapeau que le timer GTK viendra lire.
+    let mut watcher = match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+        if res.is_ok() {
+            d.store(true, Ordering::SeqCst);
+            *l.lock().unwrap() = Instant::now();
+        }
+    }) {
+        Ok(w) => w,
+        Err(e) => {
+            eprintln!("weft: watch des sources indisponible : {e}");
+            return;
+        }
+    };
+
+    let (state, ..) = ui_parts(window.upcast_ref());
+    for spec in state.borrow().registry.watch_specs() {
+        if !spec.path.is_dir() {
+            continue;
+        }
+        let mode = if spec.recursive {
+            RecursiveMode::Recursive
+        } else {
+            RecursiveMode::NonRecursive
+        };
+        if let Err(e) = watcher.watch(&spec.path, mode) {
+            eprintln!("weft: watch impossible sur {} : {e}", spec.path.display());
+        }
+    }
+
+    glib::timeout_add_seconds_local(
+        2,
+        glib::clone!(
+            #[weak] window,
+            #[upgrade_or] glib::ControlFlow::Break,
+            move || {
+                let quiet = last_event.lock().unwrap().elapsed()
+                    >= Duration::from_secs(WATCH_QUIET_SECS);
+                if dirty.load(Ordering::SeqCst) && quiet {
+                    dirty.store(false, Ordering::SeqCst);
+                    let (state, entry, list) = ui_parts(window.upcast_ref());
+                    state.borrow_mut().registry.refresh();
+                    refresh_list(&state, &list, &entry.text());
+                }
+                glib::ControlFlow::Continue
+            }
+        ),
+    );
+
+    // Le watcher s'arrête quand on le droppe : on l'attache à la fenêtre.
+    unsafe {
+        window.set_data("weft-watcher", watcher);
+    }
 }
 
 /// Re-scanne le système, vide la recherche, montre la fenêtre.

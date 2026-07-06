@@ -22,20 +22,33 @@ pub struct SteamScanner {
     root: Option<PathBuf>,
 }
 
+/// Installation Steam trouvée aux emplacements connus, s'il y en a une.
+pub fn find_steam_root() -> Option<PathBuf> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let home = Path::new(&home);
+    let candidates = [
+        home.join(".steam/steam"),
+        home.join(".local/share/Steam"),
+        home.join(".var/app/com.valvesoftware.Steam/.local/share/Steam"),
+    ];
+    candidates.into_iter().find(|p| p.join("steamapps").is_dir())
+}
+
+/// Les répertoires steamapps/ de toutes les bibliothèques (watch inotify).
+pub fn steamapps_dirs() -> Vec<PathBuf> {
+    match find_steam_root() {
+        Some(root) => library_dirs(&root)
+            .into_iter()
+            .map(|lib| lib.join("steamapps"))
+            .collect(),
+        None => Vec::new(),
+    }
+}
+
 impl SteamScanner {
     /// Cherche une installation Steam aux emplacements connus.
     pub fn new() -> Self {
-        let home = std::env::var("HOME").unwrap_or_default();
-        let home = Path::new(&home);
-        let candidates = [
-            home.join(".steam/steam"),
-            home.join(".local/share/Steam"),
-            home.join(".var/app/com.valvesoftware.Steam/.local/share/Steam"),
-        ];
-        let root = candidates
-            .into_iter()
-            .find(|p| p.join("steamapps").is_dir());
-        Self { root }
+        Self { root: find_steam_root() }
     }
 
     /// Racine explicite (tests/fixtures).

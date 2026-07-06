@@ -4,9 +4,10 @@
 
 use crate::index::Index;
 use crate::model::AppEntry;
-use crate::provider::{Action, Provider, ResultItem, Tier};
+use crate::provider::{Action, Provider, ResultItem, Tier, WatchSpec};
 use crate::providers::usage::UsageStore;
 use crate::search::Searcher;
+use crate::sources::{desktop, steam};
 
 pub struct AppProvider {
     index: Index,
@@ -87,5 +88,24 @@ impl Provider for AppProvider {
 
     fn record_activation(&mut self, item_id: &str) {
         self.usage.record(item_id);
+    }
+
+    fn watch_specs(&self) -> Vec<WatchSpec> {
+        if self.frozen {
+            return Vec::new();
+        }
+        let mut specs: Vec<WatchSpec> = desktop::default_application_dirs()
+            .into_iter()
+            // Récursif : Wine range ses .desktop dans des sous-répertoires.
+            .map(|path| WatchSpec { path, recursive: true })
+            .collect();
+        // Non récursif : les manifests sont à la racine de steamapps/, et
+        // en dessous il y a les jeux entiers (steamapps/common).
+        specs.extend(
+            steam::steamapps_dirs()
+                .into_iter()
+                .map(|path| WatchSpec { path, recursive: false }),
+        );
+        specs
     }
 }

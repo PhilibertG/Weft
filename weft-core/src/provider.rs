@@ -52,11 +52,26 @@ pub struct ResultItem {
     pub score: u32,
 }
 
+/// Un répertoire à surveiller pour rafraîchir un provider.
+/// `recursive: false` pour les répertoires dont seuls les fichiers de
+/// premier niveau nous intéressent (ex. steamapps/ — surveiller récursivement
+/// embarquerait les fichiers des jeux eux-mêmes).
+#[derive(Debug, Clone)]
+pub struct WatchSpec {
+    pub path: PathBuf,
+    pub recursive: bool,
+}
+
 pub trait Provider {
     fn name(&self) -> &'static str;
 
     /// Recharge les données sous-jacentes (rescan). No-op si sans objet.
     fn refresh(&mut self) {}
+
+    /// Répertoires dont un changement doit déclencher `refresh()`.
+    fn watch_specs(&self) -> Vec<WatchSpec> {
+        Vec::new()
+    }
 
     /// Résultats pour la requête. Contrat sur la requête vide : mode
     /// "parcourir" — les providers de catalogue (apps) rendent tout, les
@@ -106,6 +121,10 @@ impl Registry {
         for p in &mut self.providers {
             p.refresh();
         }
+    }
+
+    pub fn watch_specs(&self) -> Vec<WatchSpec> {
+        self.providers.iter().flat_map(|p| p.watch_specs()).collect()
     }
 
     /// Interroge tous les providers et fusionne : tier, puis score

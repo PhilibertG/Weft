@@ -8,3 +8,4 @@ license.workspace = true
 weft-core = { path = "../weft-core" }
 gtk = { package = "gtk4", version = "0.9", features = ["v4_14"] }
 adw = { package = "libadwaita", version = "0.7", features = ["v1_5"] }
+notify = "8.2.0"

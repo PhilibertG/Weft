@@ -140,8 +140,8 @@ impl AppSource for DesktopScanner {
 }
 
 /// Répertoires standards, utilisateur d'abord, puis exports Flatpak,
-/// puis système ($XDG_DATA_DIRS).
-fn default_application_dirs() -> Vec<PathBuf> {
+/// puis système ($XDG_DATA_DIRS). Public : sert aussi au watch inotify.
+pub fn default_application_dirs() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     let home = std::env::var("HOME").unwrap_or_default();
 

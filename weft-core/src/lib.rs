@@ -8,4 +8,4 @@ pub mod sources;
 
 pub use index::Index;
 pub use model::{AppEntry, Icon, LaunchSpec, Source};
-pub use provider::{Action, Activation, Hit, Provider, Registry, ResultItem, Tier};
+pub use provider::{Action, Activation, Hit, Provider, Registry, ResultItem, Tier, WatchSpec};
