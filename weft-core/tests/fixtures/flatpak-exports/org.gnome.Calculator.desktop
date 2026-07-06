@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Calculator
+Name[fr]=Calculatrice
+Exec=/usr/bin/flatpak run --branch=stable --arch=x86_64 --command=gnome-calculator org.gnome.Calculator
+Icon=org.gnome.Calculator
+X-Flatpak=org.gnome.Calculator

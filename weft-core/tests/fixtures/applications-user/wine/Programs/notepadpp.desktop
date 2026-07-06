@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=Notepad++
+Exec=env WINEPREFIX="/home/user/.wine" wine C:\\\\Program\\ Files\\\\Notepad++\\\\notepad++.exe
+Icon=B0C4_notepad++.0

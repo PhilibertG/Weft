@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Text Editor
+Name[fr]=Éditeur de texte
+Comment=Edit text files
+Exec=gedit %U
+Icon=org.gnome.gedit
+Keywords=text;editor;

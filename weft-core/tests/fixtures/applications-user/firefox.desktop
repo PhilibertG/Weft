@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Firefox (user override)
+Comment=Custom build
+Exec=/opt/firefox/firefox %u
+Icon=/opt/firefox/icon.png
+Keywords=web;browser;navigateur;
