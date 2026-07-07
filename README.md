@@ -132,7 +132,6 @@ Invoquez le launcher avec votre raccourci, tapez, Entrée. C'est tout.
 | Vous tapez | Vous obtenez |
 |---|---|
 | `fire` | Firefox, en tête si vous l'utilisez souvent |
-| `creeper` | votre jeu Steam, lancé via Proton sans le dire |
 | `23*7` | `= 161`, Entrée pour copier |
 | `2 inches en cm` | `= 5.08 cm` |
 | `rapport` | vos fichiers, sous les applications |
