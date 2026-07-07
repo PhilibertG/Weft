@@ -2,7 +2,7 @@
 //! exposés comme n'importe quelle app. C'est le critère de succès de la
 //! brique 2.1 : dans le launcher, elles sont indistinguables des natives.
 
-use crate::model::{AppEntry, LaunchSpec, Source};
+use crate::model::{AppEntry, Icon, LaunchSpec, Source};
 use crate::sources::AppSource;
 use crate::windows::prefix::AppStore;
 use crate::windows::WindowsRoot;
@@ -39,9 +39,9 @@ impl AppSource for WindowsAppsScanner {
                 id: format!("weft-windows:{}", app.slug),
                 name: app.manifest.name.clone(),
                 description: None,
-                // Pas d'icône en 2.1 (extraction depuis l'exe : 2.2) ;
-                // l'UI applique son fallback.
-                icon: None,
+                // Icône extraite de l'exe à l'installation ; fallback UI
+                // si l'extraction n'a rien donné.
+                icon: app.icon_path().map(Icon::Path),
                 launch: LaunchSpec::WindowsApp(app.slug),
                 source: Source::Wine,
                 keywords: Vec::new(),

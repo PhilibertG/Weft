@@ -1397,6 +1397,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "weft-installer"
+version = "0.1.0"
+dependencies = [
+ "gtk4",
+ "libadwaita",
+ "weft-core",
+]
+
+[[package]]
 name = "weft-launcher"
 version = "0.1.0"
 dependencies = [

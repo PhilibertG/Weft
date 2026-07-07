@@ -9,6 +9,7 @@
 //! implicite.
 
 pub mod discover;
+pub mod icon;
 pub mod installer;
 pub mod manifest;
 pub mod prefix;
@@ -156,9 +157,24 @@ impl WindowsEngine {
             },
         };
         manifest.save(&dir.join("manifest.toml"))?;
+
+        // Icône de l'exe (best-effort, jamais bloquant).
+        icon::extract_icon(&prefix.join(&manifest.exe), &dir.join("icon.png"));
+
         progress(&format!("« {} » installé.", manifest.name));
 
         Ok(InstalledApp { slug, dir, manifest })
+    }
+
+    /// (Ré)extrait les icônes de toutes les apps installées. Retourne les
+    /// slugs pour lesquels une icône a été produite.
+    pub fn refresh_icons(&self) -> Vec<String> {
+        self.store
+            .list()
+            .into_iter()
+            .filter(|app| icon::extract_icon(&app.exe_path(), &app.dir.join("icon.png")))
+            .map(|app| app.slug)
+            .collect()
     }
 
     /// Lance une app installée, détachée, logs dans logs/launch.log.

@@ -30,6 +30,12 @@ impl InstalledApp {
     pub fn exe_path(&self) -> PathBuf {
         self.prefix_dir().join(&self.manifest.exe)
     }
+
+    /// L'icône extraite de l'exe, si l'extraction a réussi un jour.
+    pub fn icon_path(&self) -> Option<PathBuf> {
+        let p = self.dir.join("icon.png");
+        p.is_file().then_some(p)
+    }
 }
 
 pub struct AppStore {

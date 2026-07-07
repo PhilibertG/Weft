@@ -24,6 +24,11 @@ fn main() -> ExitCode {
         ["install", file] => install(root, file, None),
         ["install", file, "--gameid", gameid] => install(root, file, Some(gameid.to_owned())),
         ["run", slug] => run(root, slug),
+        ["refresh-icons"] => {
+            let done = WindowsEngine::new(root).refresh_icons();
+            println!("Icônes extraites : {}", if done.is_empty() { "aucune".to_owned() } else { done.join(", ") });
+            ExitCode::SUCCESS
+        }
         _ => {
             eprintln!(
                 "usage: weft-windows <runtime status|runtime fetch|install <fichier> [--gameid <id>]|list|run <app>|remove <app>>"
