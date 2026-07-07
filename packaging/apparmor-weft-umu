@@ -1,0 +1,20 @@
+# Profil AppArmor pour le bwrap de pressure-vessel utilisé par umu (Weft).
+#
+# Ubuntu 24.04+ restreint les user namespaces non privilégiés
+# (kernel.apparmor_restrict_unprivileged_userns=1) : un process unconfined
+# — comme le daemon Weft lancé par systemd --user — ne peut plus créer le
+# conteneur Steam Linux Runtime. Même modèle que le profil `steam` fourni
+# par Ubuntu : autoriser userns pour ce binaire précis, rien d'autre.
+#
+# Installation :
+#   sudo cp packaging/apparmor-weft-umu /etc/apparmor.d/weft-umu
+#   sudo apparmor_parser -r /etc/apparmor.d/weft-umu
+
+abi <abi/4.0>,
+include <tunables/global>
+
+profile weft-umu @{HOME}/.local/share/umu/steamrt3/pressure-vessel/libexec/steam-runtime-tools-0/srt-bwrap flags=(unconfined) {
+  userns,
+
+  include if exists <local/weft-umu>
+}
