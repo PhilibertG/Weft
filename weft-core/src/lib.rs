@@ -6,6 +6,7 @@ pub mod provider;
 pub mod providers;
 pub mod search;
 pub mod sources;
+pub mod windows;
 
 pub use config::Config;
 pub use index::Index;
