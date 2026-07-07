@@ -14,11 +14,24 @@ pub fn launch_spec(spec: &LaunchSpec) -> io::Result<()> {
     match spec {
         LaunchSpec::Exec(argv) => spawn_detached(argv),
         // Le client Steam gère tout (Proton compris). S'il ne tourne pas,
-        // la commande `steam` le démarre puis lance le jeu.
+        // la commande le démarre puis lance le jeu. Ordre : client natif,
+        // client Flatpak (pas de binaire `steam` sur le PATH dans ce cas),
+        // et xdg-open en dernier recours (handler steam:// du bureau).
         LaunchSpec::SteamApp(app_id) => {
             let url = format!("steam://rungameid/{app_id}");
-            spawn_detached(&["steam".to_owned(), url.clone()])
-                .or_else(|_| spawn_detached(&["xdg-open".to_owned(), url]))
+            if spawn_detached(&["steam".to_owned(), url.clone()]).is_ok() {
+                return Ok(());
+            }
+            if flatpak_steam_installed() {
+                spawn_detached(&[
+                    "flatpak".to_owned(),
+                    "run".to_owned(),
+                    "com.valvesoftware.Steam".to_owned(),
+                    url,
+                ])
+            } else {
+                spawn_detached(&["xdg-open".to_owned(), url])
+            }
         }
     }
 }
@@ -26,6 +39,14 @@ pub fn launch_spec(spec: &LaunchSpec) -> io::Result<()> {
 /// Ouvre un fichier/dossier avec l'application par défaut.
 pub fn open_path(path: &Path) -> io::Result<()> {
     spawn_detached(&["xdg-open".to_owned(), path.display().to_string()])
+}
+
+fn flatpak_steam_installed() -> bool {
+    std::env::var("HOME").is_ok_and(|h| {
+        Path::new(&h)
+            .join(".var/app/com.valvesoftware.Steam")
+            .is_dir()
+    })
 }
 
 fn spawn_detached<S: AsRef<str>>(argv: &[S]) -> io::Result<()> {
