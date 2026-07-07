@@ -1,3 +1,4 @@
+pub mod config;
 pub mod index;
 pub mod launch;
 pub mod model;
@@ -6,6 +7,7 @@ pub mod providers;
 pub mod search;
 pub mod sources;
 
+pub use config::Config;
 pub use index::Index;
 pub use model::{AppEntry, Icon, LaunchSpec, Source};
 pub use provider::{Action, Activation, Hit, Provider, Registry, ResultItem, Tier, WatchSpec};

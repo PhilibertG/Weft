@@ -112,12 +112,24 @@ impl Registry {
         Self { providers }
     }
 
-    /// Registre par défaut du système réel (la config le rendra pilotable).
+    /// Registre du système réel, providers activés selon la config.
+    pub fn from_config(cfg: &crate::config::ProvidersConfig) -> Self {
+        let mut providers: Vec<Box<dyn Provider>> = Vec::new();
+        if cfg.apps {
+            providers.push(Box::new(crate::providers::apps::AppProvider::new()));
+        }
+        if cfg.calc {
+            providers.push(Box::new(crate::providers::calc::CalcProvider));
+        }
+        if cfg.files {
+            providers.push(Box::new(crate::providers::files::FilesProvider::new()));
+        }
+        Self::new(providers)
+    }
+
+    /// Registre par défaut (tous les providers).
     pub fn with_defaults() -> Self {
-        Self::new(vec![
-            Box::new(crate::providers::apps::AppProvider::new()),
-            Box::new(crate::providers::calc::CalcProvider),
-        ])
+        Self::from_config(&crate::config::ProvidersConfig::default())
     }
 
     pub fn refresh(&mut self) {

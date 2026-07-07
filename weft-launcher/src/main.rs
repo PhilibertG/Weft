@@ -16,10 +16,9 @@ use gtk::glib;
 use gtk::pango;
 
 use weft_core::model::Icon;
-use weft_core::{Activation, Hit, Registry, ResultItem};
+use weft_core::{Action, Activation, Config, Hit, Registry, ResultItem};
 
 const APP_ID: &str = "dev.weft.Launcher";
-const MAX_RESULTS: usize = 8;
 
 /// Debounce du watch : on attend ce silence avant de re-scanner. Généreux
 /// exprès — pendant un téléchargement Steam les manifests sont réécrits en
@@ -34,6 +33,7 @@ struct State {
     registry: Registry,
     /// Hits actuellement affichés, même ordre que la ListBox.
     hits: Vec<Hit>,
+    max_results: usize,
 }
 
 fn main() -> glib::ExitCode {
@@ -84,9 +84,11 @@ fn activate(app: &adw::Application) {
 }
 
 fn build_ui(app: &adw::Application) -> gtk::ApplicationWindow {
+    let cfg = Config::load();
     let state = Rc::new(RefCell::new(State {
-        registry: Registry::with_defaults(),
+        registry: Registry::from_config(&cfg.providers),
         hits: Vec::new(),
+        max_results: cfg.window.max_results,
     }));
 
     let entry = gtk::SearchEntry::builder()
@@ -113,8 +115,8 @@ fn build_ui(app: &adw::Application) -> gtk::ApplicationWindow {
     let window = gtk::ApplicationWindow::builder()
         .application(app)
         .title("Weft")
-        .default_width(620)
-        .default_height(440)
+        .default_width(cfg.window.width)
+        .default_height(cfg.window.height)
         .resizable(false)
         .decorated(false)
         .child(&root)
@@ -262,11 +264,11 @@ fn refresh_and_present(window: &gtk::Window) {
 
 fn refresh_list(state: &Rc<RefCell<State>>, list: &gtk::ListBox, query: &str) {
     let mut s = state.borrow_mut();
-    let State { registry, hits } = &mut *s;
+    let State { registry, hits, max_results } = &mut *s;
     *hits = registry.query(query);
     // Requête vide : liste complète scrollable. Sinon, top résultats.
     if !query.is_empty() {
-        hits.truncate(MAX_RESULTS);
+        hits.truncate(*max_results);
     }
 
     list.remove_all();
@@ -279,11 +281,7 @@ fn refresh_list(state: &Rc<RefCell<State>>, list: &gtk::ListBox, query: &str) {
 }
 
 fn make_row(item: &ResultItem) -> gtk::ListBoxRow {
-    let icon = match &item.icon {
-        Some(Icon::Named(name)) => gtk::Image::from_icon_name(name),
-        Some(Icon::Path(path)) => gtk::Image::from_file(path),
-        None => gtk::Image::from_icon_name("application-x-executable-symbolic"),
-    };
+    let icon = row_icon(item);
     icon.set_pixel_size(32);
 
     let name = gtk::Label::builder()
@@ -316,9 +314,36 @@ fn make_row(item: &ResultItem) -> gtk::ListBoxRow {
     row
 }
 
+fn row_icon(item: &ResultItem) -> gtk::Image {
+    match &item.icon {
+        Some(Icon::Named(name)) => {
+            // Nom absent du thème : GTK afficherait une image cassée, on
+            // préfère un fallback discret.
+            let in_theme = gtk::gdk::Display::default()
+                .is_some_and(|d| gtk::IconTheme::for_display(&d).has_icon(name));
+            if in_theme {
+                gtk::Image::from_icon_name(name)
+            } else {
+                gtk::Image::from_icon_name("application-x-executable-symbolic")
+            }
+        }
+        Some(Icon::Path(path)) => gtk::Image::from_file(path),
+        // Fichier sans icône imposée : icône du type MIME, déduite du nom
+        // (pas de lecture du contenu — la liste doit rester instantanée).
+        None => {
+            if let Action::OpenPath(path) = &item.action {
+                let (ctype, _) = gtk::gio::functions::content_type_guess(Some(path), &[]);
+                gtk::Image::from_gicon(&gtk::gio::functions::content_type_get_icon(&ctype))
+            } else {
+                gtk::Image::from_icon_name("application-x-executable-symbolic")
+            }
+        }
+    }
+}
+
 fn launch_row(state: &Rc<RefCell<State>>, row_index: i32, window: &gtk::ApplicationWindow) {
     let mut s = state.borrow_mut();
-    let State { registry, hits } = &mut *s;
+    let State { registry, hits, .. } = &mut *s;
     let Some(hit) = hits.get(row_index as usize) else { return };
     match registry.activate(hit) {
         Ok(Activation::Done) => {
@@ -376,7 +401,7 @@ fn load_css() {
 
 fn debug_list(query: &str) -> glib::ExitCode {
     let start = std::time::Instant::now();
-    let mut registry = Registry::with_defaults();
+    let mut registry = Registry::from_config(&Config::load().providers);
     let scan_time = start.elapsed();
     let hits = registry.query(query);
     for hit in hits.iter().take(15) {
