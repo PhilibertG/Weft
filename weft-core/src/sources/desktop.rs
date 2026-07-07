@@ -72,6 +72,7 @@ impl DesktopScanner {
         let name = entry
             .name(&self.locales)
             .map(|n| n.into_owned())
+            .filter(|n| !n.trim().is_empty()) // Name= vide : retomber sur l'id
             .unwrap_or_else(|| file_id.trim_end_matches(".desktop").to_owned());
 
         // Raccourci Steam : on délègue le lancement au client Steam et on
@@ -85,11 +86,14 @@ impl DesktopScanner {
             (format!("desktop:{file_id}"), LaunchSpec::Exec(argv), source)
         };
 
-        let icon = entry.icon().map(|i| {
+        // Icône à chemin absolu inexistant => pas d'icône (fallback UI),
+        // plutôt qu'une image cassée.
+        let icon = entry.icon().and_then(|i| {
             if i.starts_with('/') {
-                Icon::Path(PathBuf::from(i))
+                let p = PathBuf::from(i);
+                p.is_file().then(|| Icon::Path(p))
             } else {
-                Icon::Named(i.to_owned())
+                Some(Icon::Named(i.to_owned()))
             }
         });
 

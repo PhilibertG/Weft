@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=GIMP
+Exec=/usr/bin/flatpak run --branch=stable --arch=x86_64 --command=gimp org.gimp.GIMP %U
+Icon=org.gimp.GIMP
+X-Flatpak=org.gimp.GIMP

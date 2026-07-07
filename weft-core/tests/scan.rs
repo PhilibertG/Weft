@@ -167,6 +167,48 @@ fn index_dedups_steam_shortcut_against_manifest() {
 }
 
 #[test]
+fn robustness_bad_files_degrade_quietly() {
+    let entries = desktop_scanner().scan();
+    let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+
+    // Fichier illisible : ignoré sans crash, les autres passent.
+    assert!(!names.iter().any(|n| n.contains("pas un fichier")));
+    // Icône à chemin absolu mort : entrée gardée, icône retirée.
+    let dead = entries.iter().find(|e| e.name == "Dead Icon App").unwrap();
+    assert!(dead.icon.is_none());
+}
+
+#[test]
+fn steam_scan_ignores_garbage_manifest() {
+    let root = make_steam_root("garbage");
+    std::fs::write(
+        root.join("steamapps/appmanifest_999.acf"),
+        "{{{ du bruit \"non parsable",
+    )
+    .unwrap();
+
+    let entries = SteamScanner::with_root(root.clone()).scan();
+    assert_eq!(entries.len(), 2); // Portal 2 + Overwatch 2, rien de plus
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn index_dedups_deb_and_flatpak_of_same_app() {
+    let index = Index::from_sources(&[&desktop_scanner()]);
+    let gimps: Vec<_> = index
+        .entries()
+        .iter()
+        .filter(|e| e.name == "GIMP")
+        .collect();
+
+    assert_eq!(gimps.len(), 1, "une seule entrée GIMP attendue");
+    assert_eq!(gimps[0].source, Source::Native, "priorité au natif");
+    // Le Flatpak sans équivalent natif reste, lui.
+    assert!(index.entries().iter().any(|e| e.name == "Calculatrice"));
+}
+
+#[test]
 fn search_is_fuzzy_and_ranked() {
     let entries = desktop_scanner().scan();
     let mut searcher = Searcher::new();

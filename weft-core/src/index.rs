@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use crate::model::AppEntry;
+use crate::model::{AppEntry, Source};
 use crate::sources::AppSource;
 
 pub struct Index {
@@ -31,7 +31,9 @@ impl Index {
                 }
             }
         }
-        Self { entries }
+        Self {
+            entries: dedup_native_flatpak(entries),
+        }
     }
 
     pub fn entries(&self) -> &[AppEntry] {
@@ -49,4 +51,28 @@ impl Index {
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
+}
+
+/// Même app en .deb ET en Flatpak => une seule entrée, priorité au natif
+/// (démarrage plus rapide, mieux intégré ; l'utilisateur qui préfère le
+/// Flatpak désinstalle le .deb). Rapprochement par nom normalisé — les ids
+/// diffèrent toujours (`firefox.desktop` vs `org.mozilla.firefox.desktop`).
+fn dedup_native_flatpak(entries: Vec<AppEntry>) -> Vec<AppEntry> {
+    let native_names: HashSet<String> = entries
+        .iter()
+        .filter(|e| e.source == Source::Native)
+        .map(|e| normalize_name(&e.name))
+        .collect();
+    entries
+        .into_iter()
+        .filter(|e| e.source != Source::Flatpak || !native_names.contains(&normalize_name(&e.name)))
+        .collect()
+}
+
+/// "Notepad++" et "notepad++", "GIMP " et "GIMP" doivent se rapprocher.
+fn normalize_name(name: &str) -> String {
+    name.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
 }
