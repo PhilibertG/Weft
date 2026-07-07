@@ -59,6 +59,11 @@ impl AppStore {
             if !dir.is_dir() {
                 continue;
             }
+            // Pas de manifest : installation en cours ou répertoire
+            // étranger — on passe sans bruit.
+            if !dir.join("manifest.toml").is_file() {
+                continue;
+            }
             match Manifest::load(&dir.join("manifest.toml")) {
                 Ok(manifest) => apps.push(InstalledApp {
                     slug: dir.file_name().unwrap_or_default().to_string_lossy().into_owned(),

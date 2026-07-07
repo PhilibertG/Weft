@@ -112,10 +112,7 @@ impl WindowsEngine {
             )),
             installer::InstallerKind::PortableExe => {
                 progress("Programme portable : copie dans son environnement…");
-                let dest_dir = prefix.join("drive_c/weft-portable");
-                std::fs::create_dir_all(&dest_dir)?;
-                let dest = dest_dir.join(file.file_name().unwrap_or_default());
-                std::fs::copy(file, &dest).map(|_| ())
+                copy_portable(file, &prefix)
             }
             installer::InstallerKind::Msi => {
                 progress("Installation (Windows Installer)… suis l'assistant s'il s'affiche.");
@@ -156,14 +153,47 @@ impl WindowsEngine {
                 umu: runtime::PINNED_UMU.to_owned(),
             },
         };
+
+        // Réinstallation du même programme (même nom, même exe) : on
+        // REMPLACE l'app existante au lieu d'empiler un doublon -2, en
+        // reprenant son slug — l'identité (et donc la frecency) survit.
+        let (slug, dir) = match self.find_same_app(&slug, &manifest) {
+            Some(old_slug) => {
+                progress(&format!("« {} » déjà installé : remplacement.", manifest.name));
+                self.store.remove(&old_slug)?;
+                let old_dir = dir.parent().unwrap().join(&old_slug);
+                std::fs::rename(&dir, &old_dir)?;
+                (old_slug, old_dir)
+            }
+            None => (slug, dir),
+        };
+
         manifest.save(&dir.join("manifest.toml"))?;
 
-        // Icône de l'exe (best-effort, jamais bloquant).
-        icon::extract_icon(&prefix.join(&manifest.exe), &dir.join("icon.png"));
+        // Icône de l'exe (best-effort, jamais bloquant). `dir` a pu être
+        // renommé par le remplacement : on repart de lui.
+        icon::extract_icon(
+            &dir.join("prefix").join(&manifest.exe),
+            &dir.join("icon.png"),
+        );
 
         progress(&format!("« {} » installé.", manifest.name));
 
         Ok(InstalledApp { slug, dir, manifest })
+    }
+
+    /// Une app déjà installée qui est "le même programme" que celui qu'on
+    /// vient d'installer sous `current_slug` : même nom ET même exe.
+    fn find_same_app(&self, current_slug: &str, manifest: &Manifest) -> Option<String> {
+        self.store
+            .list()
+            .into_iter()
+            .find(|a| {
+                a.slug != current_slug
+                    && a.manifest.name == manifest.name
+                    && a.manifest.exe == manifest.exe
+            })
+            .map(|a| a.slug)
     }
 
     /// (Ré)extrait les icônes de toutes les apps installées. Retourne les
@@ -252,5 +282,142 @@ impl WindowsEngine {
             ));
         }
         Ok(())
+    }
+}
+
+/// Copie un programme portable dans le préfixe.
+///
+/// Un exe "portable" est rarement seul : jeux Electron/Unity, outils avec
+/// DLLs — l'exe a besoin de ses fichiers voisins (PolyTrack sans son
+/// icudtl.dat crashe immédiatement). Si le dossier parent ressemble à un
+/// dossier d'application, on le copie ENTIER ; sinon (exe posé dans
+/// Téléchargements au milieu d'autres fichiers), l'exe seul.
+fn copy_portable(file: &Path, prefix: &Path) -> io::Result<()> {
+    let dest_root = prefix.join("drive_c/weft-portable");
+    match file.parent().filter(|p| is_app_folder(p, file)) {
+        Some(parent) => {
+            let dir_name = parent.file_name().unwrap_or_default();
+            copy_dir_recursive(parent, &dest_root.join(dir_name))
+        }
+        None => {
+            std::fs::create_dir_all(&dest_root)?;
+            std::fs::copy(file, dest_root.join(file.file_name().unwrap_or_default()))
+                .map(|_| ())
+        }
+    }
+}
+
+/// Le dossier parent est-il LE dossier de l'application, ou juste un
+/// endroit où l'exe traîne ? Deux gardes :
+/// - jamais un répertoire "fourre-tout" (home, Téléchargements, Bureau...) ;
+/// - l'exe choisi doit être le seul .exe de premier niveau (deux exes =>
+///   probablement des programmes sans rapport, on ne prend pas le risque).
+fn is_app_folder(dir: &Path, exe: &Path) -> bool {
+    if is_common_dir(dir) {
+        return false;
+    }
+    let Ok(read) = std::fs::read_dir(dir) else { return false };
+    let mut entries = 0usize;
+    for e in read.flatten() {
+        let p = e.path();
+        entries += 1;
+        let is_exe = p
+            .extension()
+            .is_some_and(|x| x.eq_ignore_ascii_case("exe"));
+        if is_exe && p != exe {
+            return false;
+        }
+    }
+    entries > 1 // l'exe seul dans un dossier : rien d'autre à copier
+}
+
+/// Répertoires standards où un exe téléchargé atterrit : on ne copie
+/// JAMAIS tout leur contenu.
+fn is_common_dir(dir: &Path) -> bool {
+    let home = std::env::var("HOME").map(PathBuf::from).ok();
+    if home.as_deref() == Some(dir) {
+        return true;
+    }
+    if dir == Path::new("/tmp") {
+        return true;
+    }
+    const COMMON: &[&str] = &[
+        "Téléchargements", "Downloads", "Bureau", "Desktop", "Documents",
+        "Images", "Pictures", "Videos", "Vidéos", "Musique", "Music",
+    ];
+    home.is_some_and(|h| COMMON.iter().any(|n| h.join(n) == dir))
+}
+
+fn copy_dir_recursive(src: &Path, dest: &Path) -> io::Result<()> {
+    std::fs::create_dir_all(dest)?;
+    for e in std::fs::read_dir(src)?.flatten() {
+        let from = e.path();
+        let to = dest.join(e.file_name());
+        if from.is_dir() {
+            copy_dir_recursive(&from, &to)?;
+        } else {
+            std::fs::copy(&from, &to)?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp(tag: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("weft-portable-{}-{tag}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&p);
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[test]
+    fn app_folder_with_data_files_is_copied_whole() {
+        let root = temp("appdir");
+        let app = root.join("MonJeu-v1.0");
+        std::fs::create_dir_all(app.join("resources")).unwrap();
+        std::fs::write(app.join("jeu.exe"), b"MZ").unwrap();
+        std::fs::write(app.join("icudtl.dat"), b"data").unwrap();
+        std::fs::write(app.join("resources/app.pak"), b"pak").unwrap();
+
+        let prefix = root.join("prefix");
+        copy_portable(&app.join("jeu.exe"), &prefix).unwrap();
+
+        let copied = prefix.join("drive_c/weft-portable/MonJeu-v1.0");
+        assert!(copied.join("jeu.exe").is_file());
+        assert!(copied.join("icudtl.dat").is_file());
+        assert!(copied.join("resources/app.pak").is_file());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn folder_with_several_exes_copies_only_the_chosen_one() {
+        let root = temp("multi");
+        std::fs::write(root.join("a.exe"), b"MZ").unwrap();
+        std::fs::write(root.join("b.exe"), b"MZ").unwrap();
+        std::fs::write(root.join("notes.txt"), b"x").unwrap();
+
+        let prefix = root.join("prefix");
+        copy_portable(&root.join("a.exe"), &prefix).unwrap();
+
+        let dest = prefix.join("drive_c/weft-portable");
+        assert!(dest.join("a.exe").is_file());
+        assert!(!dest.join("b.exe").exists());
+        assert!(!dest.join("notes.txt").exists());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn common_dirs_are_never_copied_whole() {
+        let home = std::env::var("HOME").unwrap();
+        assert!(is_common_dir(Path::new(&home)));
+        assert!(is_common_dir(&Path::new(&home).join("Téléchargements")));
+        assert!(is_common_dir(&Path::new(&home).join("Downloads")));
+        assert!(is_common_dir(Path::new("/tmp")));
+        assert!(!is_common_dir(&Path::new(&home).join("Downloads/PolyTrack-v0.6.2")));
     }
 }
