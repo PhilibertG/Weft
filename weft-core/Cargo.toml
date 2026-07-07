@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+fend-core = "1.5.8"
 freedesktop-desktop-entry = "0.7"
 keyvalues-parser = "0.2"
 nucleo-matcher = "0.3"

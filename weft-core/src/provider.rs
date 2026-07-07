@@ -114,7 +114,10 @@ impl Registry {
 
     /// Registre par défaut du système réel (la config le rendra pilotable).
     pub fn with_defaults() -> Self {
-        Self::new(vec![Box::new(crate::providers::apps::AppProvider::new())])
+        Self::new(vec![
+            Box::new(crate::providers::apps::AppProvider::new()),
+            Box::new(crate::providers::calc::CalcProvider),
+        ])
     }
 
     pub fn refresh(&mut self) {
