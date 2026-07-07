@@ -1,5 +1,6 @@
 pub mod desktop;
 pub mod steam;
+pub mod windows;
 
 use crate::model::AppEntry;
 

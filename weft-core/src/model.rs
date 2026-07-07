@@ -25,6 +25,9 @@ pub enum LaunchSpec {
     Exec(Vec<String>),
     /// Launched through the Steam client (covers Proton transparently).
     SteamApp(u32),
+    /// App Windows installée par Weft, lancée via umu/Proton (brique 2).
+    /// La string est le slug dans le store d'apps Windows.
+    WindowsApp(String),
 }
 
 /// The unified app object. Every source maps into this and nothing else.

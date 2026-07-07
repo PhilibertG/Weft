@@ -13,6 +13,13 @@ use crate::model::LaunchSpec;
 pub fn launch_spec(spec: &LaunchSpec) -> io::Result<()> {
     match spec {
         LaunchSpec::Exec(argv) => spawn_detached(argv),
+        // App Windows Weft : le moteur reconstruit l'environnement
+        // (préfixe isolé, Proton épinglé, gameid) et logue dans l'app.
+        LaunchSpec::WindowsApp(slug) => {
+            let root = crate::windows::WindowsRoot::open_default()
+                .ok_or_else(|| io::Error::other("HOME introuvable"))?;
+            crate::windows::WindowsEngine::new(root).launch(slug)
+        }
         // Le client Steam gère tout (Proton compris). S'il ne tourne pas,
         // la commande le démarre puis lance le jeu. Ordre : client natif,
         // client Flatpak (pas de binaire `steam` sur le PATH dans ce cas),

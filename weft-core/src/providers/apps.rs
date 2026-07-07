@@ -106,6 +106,12 @@ impl Provider for AppProvider {
                 .into_iter()
                 .map(|path| WatchSpec { path, recursive: false }),
         );
+        // Apps Windows Weft : non récursif aussi — en dessous il y a les
+        // préfixes Wine, très bavards. La création/suppression d'un
+        // répertoire d'app suffit à déclencher le re-scan.
+        if let Some(root) = crate::windows::WindowsRoot::open_default() {
+            specs.push(WatchSpec { path: root.apps_dir(), recursive: false });
+        }
         specs
     }
 }

@@ -12,8 +12,17 @@ pub struct Index {
 impl Index {
     /// Construit l'index avec les sources par défaut du système réel.
     pub fn build() -> Self {
-        use crate::sources::{desktop::DesktopScanner, steam::SteamScanner};
-        Self::from_sources(&[&DesktopScanner::new(), &SteamScanner::new()])
+        use crate::sources::{
+            desktop::DesktopScanner, steam::SteamScanner, windows::WindowsAppsScanner,
+        };
+        let desktop = DesktopScanner::new();
+        let steam = SteamScanner::new();
+        let mut sources: Vec<&dyn AppSource> = vec![&desktop, &steam];
+        let windows = WindowsAppsScanner::new();
+        if let Some(w) = &windows {
+            sources.push(w);
+        }
+        Self::from_sources(&sources)
     }
 
     /// Construit l'index à partir de sources arbitraires (tests).
