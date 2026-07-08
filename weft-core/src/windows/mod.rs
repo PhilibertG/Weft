@@ -354,19 +354,26 @@ impl WindowsEngine {
                 io::Error::other(format!("« {gamename} » n'est pas dans ta bibliothèque GOG"))
             })?;
 
-        progress(&format!("Téléchargement de « {} »…", game.title));
+        // Vrai titre + product id via l'API publique (best-effort).
+        let (product_id, title) = match gog::product_info(gamename) {
+            Some((id, title)) => (Some(id), title),
+            None => (None, game.title),
+        };
+
+        progress(&format!("Téléchargement de « {title} »…"));
         let tmp = self.store_tmp_dir()?;
         let setup = gog::download_installer(gamename, &tmp, &tmp.join("download.log"))?;
 
         progress("Recherche de correctifs connus…");
-        let gameid = epic::umu_id(&game.product_id, "gog")
+        let gameid = product_id
+            .and_then(|id| epic::umu_id(&id, "gog"))
             .or_else(|| epic::umu_id(gamename, "gog"));
 
         let opts = InstallOptions {
             gameid,
             store: Some("gog".to_owned()),
             store_id: Some(gamename.to_owned()),
-            name: Some(game.title),
+            name: Some(title),
             silent: true,
         };
         let result = self.install(&setup, opts, &mut progress);

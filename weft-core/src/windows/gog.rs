@@ -29,48 +29,74 @@ pub struct GogGame {
     /// Slug GOG ("betrayer", "stardew_valley") — le futur store_id.
     pub gamename: String,
     pub title: String,
-    /// Product id numérique (clé de la base protonfixes pour STORE=gog).
-    pub product_id: String,
 }
 
 /// La bibliothèque du compte.
+///
+/// Format simple uniquement : les sorties `json` et `details` de
+/// lgogdownloader 3.12 crashent (std::length_error, constaté en réel).
+/// Le titre est donc dérivé du slug ; le vrai titre viendra de l'API
+/// publique GOG au moment de l'installation.
 pub fn library() -> io::Result<Vec<GogGame>> {
-    let out = Command::new("lgogdownloader")
-        .args(["--list", "json"])
-        .output()?;
+    let out = Command::new("lgogdownloader").arg("--list").output()?;
     if !out.status.success() {
         return Err(io::Error::other(
             "impossible de lire la bibliothèque GOG (compte connecté ?)",
         ));
     }
-    let v: serde_json::Value = serde_json::from_slice(&out.stdout)
-        .map_err(|e| io::Error::other(format!("réponse lgogdownloader illisible : {e}")))?;
-    let games = v
-        .get("games")
-        .and_then(|g| g.as_array())
-        .cloned()
-        .or_else(|| v.as_array().cloned())
-        .unwrap_or_default();
-    let mut list: Vec<GogGame> = games
-        .iter()
-        .filter_map(|g| {
-            Some(GogGame {
-                gamename: g.get("gamename")?.as_str()?.to_owned(),
-                title: g
-                    .get("title")
-                    .and_then(|t| t.as_str())
-                    .unwrap_or(g.get("gamename")?.as_str()?)
-                    .to_owned(),
-                product_id: match g.get("product_id").or_else(|| g.get("id")) {
-                    Some(serde_json::Value::String(s)) => s.clone(),
-                    Some(serde_json::Value::Number(n)) => n.to_string(),
-                    _ => String::new(),
-                },
-            })
+    let mut list: Vec<GogGame> = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(|slug| GogGame {
+            gamename: slug.to_owned(),
+            title: prettify(slug),
         })
         .collect();
     list.sort_by(|a, b| a.title.cmp(&b.title));
     Ok(list)
+}
+
+/// "stardew_valley" → "Stardew Valley".
+fn prettify(slug: &str) -> String {
+    slug.split('_')
+        .filter(|w| !w.is_empty())
+        .map(|w| {
+            let mut c = w.chars();
+            match c.next() {
+                Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// (product id numérique, vrai titre) d'un jeu, via l'API publique GOG —
+/// le product id est la clé de la base protonfixes pour STORE=gog.
+/// Best-effort : hors-ligne ou introuvable => None.
+pub fn product_info(gamename: &str) -> Option<(String, String)> {
+    let url = format!(
+        "https://embed.gog.com/games/ajax/filtered?mediaType=game&search={}",
+        gamename.replace('_', " ")
+    );
+    let out = Command::new("curl")
+        .args(["-s", "--max-time", "10", &url])
+        .output()
+        .ok()?;
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+    v.get("products")?.as_array()?.iter().find_map(|p| {
+        (p.get("slug")?.as_str()? == gamename).then(|| {
+            Some((
+                p.get("id").map(|i| match i {
+                    serde_json::Value::Number(n) => n.to_string(),
+                    serde_json::Value::String(s) => s.clone(),
+                    _ => String::new(),
+                })?,
+                p.get("title")?.as_str()?.to_owned(),
+            ))
+        })?
+    })
 }
 
 /// Télécharge l'installeur offline Windows d'un jeu dans `dest` et
