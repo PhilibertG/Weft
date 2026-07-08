@@ -27,6 +27,9 @@ fn main() -> ExitCode {
         ["epic", "login"] => epic_login(),
         ["epic", "list"] => epic_list(),
         ["epic", "install", app_name] => epic_install(root, app_name),
+        ["gog", "login"] => gog_login(),
+        ["gog", "list"] => gog_list(),
+        ["gog", "install", gamename] => gog_install(root, gamename),
         ["refresh-icons"] => {
             let done = WindowsEngine::new(root).refresh_icons();
             println!("Icônes extraites : {}", if done.is_empty() { "aucune".to_owned() } else { done.join(", ") });
@@ -72,6 +75,46 @@ fn epic_list() -> ExitCode {
 
 fn epic_install(root: WindowsRoot, app_name: &str) -> ExitCode {
     match WindowsEngine::new(root).install_epic(app_name, |msg| println!("{msg}")) {
+        Ok(app) => {
+            println!("OK : « {} » — visible dans le launcher.", app.manifest.name);
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("weft-windows : {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn gog_login() -> ExitCode {
+    if !weft_core::windows::gog::available() {
+        eprintln!("weft-windows : outil lgogdownloader manquant (sudo apt install lgogdownloader)");
+        return ExitCode::FAILURE;
+    }
+    match std::process::Command::new("lgogdownloader").arg("--login").status() {
+        Ok(s) if s.success() => ExitCode::SUCCESS,
+        _ => ExitCode::FAILURE,
+    }
+}
+
+fn gog_list() -> ExitCode {
+    match weft_core::windows::gog::library() {
+        Ok(games) => {
+            for g in &games {
+                println!("{:<40} {}", g.gamename, g.title);
+            }
+            eprintln!("\n{} jeux — installer : weft-windows gog install <premier champ>", games.len());
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("weft-windows : {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn gog_install(root: WindowsRoot, gamename: &str) -> ExitCode {
+    match WindowsEngine::new(root).install_gog(gamename, |msg| println!("{msg}")) {
         Ok(app) => {
             println!("OK : « {} » — visible dans le launcher.", app.manifest.name);
             ExitCode::SUCCESS

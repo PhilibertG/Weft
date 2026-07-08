@@ -54,6 +54,10 @@ impl AppStore {
         Self { root }
     }
 
+    pub fn root_path(&self) -> PathBuf {
+        self.root.path().to_path_buf()
+    }
+
     /// Toutes les apps valides. Un manifest illisible est ignoré (avec un
     /// avertissement stderr), jamais bloquant — dégradation propre.
     pub fn list(&self) -> Vec<InstalledApp> {

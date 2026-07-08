@@ -10,6 +10,7 @@
 
 pub mod discover;
 pub mod epic;
+pub mod gog;
 pub mod icon;
 pub mod installer;
 pub mod manifest;
@@ -116,10 +117,13 @@ impl WindowsEngine {
         }
 
         let kind = installer::detect(file)?;
-        let hint = file
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "app".to_owned());
+        // Slug depuis le vrai titre quand un store nous le donne, sinon
+        // depuis le nom de fichier de l'installeur.
+        let hint = opts.name.clone().unwrap_or_else(|| {
+            file.file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "app".to_owned())
+        });
 
         let (slug, dir) = self.store.create(&hint)?;
         let prefix = dir.join("prefix");
@@ -318,6 +322,74 @@ impl WindowsEngine {
         icon::extract_icon(&app.exe_path(), &app.dir.join("icon.png"));
         progress(&format!("« {} » installé.", app.manifest.name));
         Ok(app)
+    }
+
+    /// Installe un jeu GOG : lgogdownloader télécharge l'installeur
+    /// offline officiel (Inno + .bin), le moteur 2.2 l'installe en
+    /// silencieux. gameid protonfixes résolu par product id GOG.
+    pub fn install_gog(
+        &self,
+        gamename: &str,
+        mut progress: impl FnMut(&str),
+    ) -> io::Result<InstalledApp> {
+        if !self.runtime.status().ready() {
+            return Err(io::Error::other(
+                "environnement Windows pas encore prêt (weft-windows runtime fetch)",
+            ));
+        }
+        if !gog::available() {
+            return Err(io::Error::other(
+                "support GOG non installé (outil lgogdownloader manquant)",
+            ));
+        }
+        if !gog::logged_in() {
+            return Err(io::Error::other(
+                "aucun compte GOG connecté (weft-windows gog login)",
+            ));
+        }
+        let game = gog::library()?
+            .into_iter()
+            .find(|g| g.gamename == gamename)
+            .ok_or_else(|| {
+                io::Error::other(format!("« {gamename} » n'est pas dans ta bibliothèque GOG"))
+            })?;
+
+        progress(&format!("Téléchargement de « {} »…", game.title));
+        let tmp = self.store_tmp_dir()?;
+        let setup = gog::download_installer(gamename, &tmp, &tmp.join("download.log"))?;
+
+        progress("Recherche de correctifs connus…");
+        let gameid = epic::umu_id(&game.product_id, "gog")
+            .or_else(|| epic::umu_id(gamename, "gog"));
+
+        let opts = InstallOptions {
+            gameid,
+            store: Some("gog".to_owned()),
+            store_id: Some(gamename.to_owned()),
+            name: Some(game.title),
+            silent: true,
+        };
+        let result = self.install(&setup, opts, &mut progress);
+        // L'installeur téléchargé ne sert plus (souvent plusieurs Go).
+        let _ = std::fs::remove_dir_all(&tmp);
+        result
+    }
+
+    fn store_tmp_dir(&self) -> io::Result<PathBuf> {
+        let dir = self.runtime_root_tmp().join("gog-download");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir)?;
+        Ok(dir)
+    }
+
+    fn runtime_root_tmp(&self) -> PathBuf {
+        // Sous la racine Weft : même système de fichiers que la
+        // destination, et nettoyé avec elle.
+        self.store_root().join("tmp")
+    }
+
+    fn store_root(&self) -> PathBuf {
+        self.store.root_path()
     }
 
     /// Une app déjà installée qui est "le même programme" que celui qu'on
