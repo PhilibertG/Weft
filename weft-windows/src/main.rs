@@ -7,7 +7,7 @@ use std::process::ExitCode;
 
 use weft_core::windows::prefix::AppStore;
 use weft_core::windows::runtime::{Runtime, PINNED_PROTON, PINNED_UMU};
-use weft_core::windows::{WindowsEngine, WindowsRoot};
+use weft_core::windows::{InstallOptions, WindowsEngine, WindowsRoot};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -39,7 +39,8 @@ fn main() -> ExitCode {
 }
 
 fn install(root: WindowsRoot, file: &str, gameid: Option<String>) -> ExitCode {
-    match WindowsEngine::new(root).install(Path::new(file), gameid, |msg| println!("{msg}")) {
+    let opts = InstallOptions { gameid, ..Default::default() };
+    match WindowsEngine::new(root).install(Path::new(file), opts, |msg| println!("{msg}")) {
         Ok(app) => {
             println!("OK : « {} » (slug {}) — visible dans le launcher.", app.manifest.name, app.slug);
             ExitCode::SUCCESS

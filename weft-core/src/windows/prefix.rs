@@ -129,6 +129,8 @@ mod tests {
             name: name.into(),
             exe: "drive_c/app.exe".into(),
             gameid: None,
+            store: None,
+            store_id: None,
             created: String::new(),
             runtime: RuntimeVersions { proton: "p".into(), umu: "u".into() },
         }

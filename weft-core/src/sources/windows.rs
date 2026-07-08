@@ -67,6 +67,8 @@ mod tests {
             name: "WinMerge".into(),
             exe: "drive_c/Program Files/WinMerge/WinMergeU.exe".into(),
             gameid: None,
+            store: None,
+            store_id: None,
             created: String::new(),
             runtime: RuntimeVersions { proton: "p".into(), umu: "u".into() },
         }

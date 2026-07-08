@@ -16,6 +16,14 @@ pub struct Manifest {
     /// Id protonfixes ; None => "umu-default" (pas de correctifs par-jeu).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gameid: Option<String>,
+    /// Store d'origine pour la recherche de correctifs ("gog", "egs") ;
+    /// None => "none". Jamais montré dans l'UI, comme le reste.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub store: Option<String>,
+    /// Identifiant du jeu chez son store (app_name Epic, slug GOG) —
+    /// nécessaire pour lancer/mettre à jour via l'outil du store.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub store_id: Option<String>,
     /// Date d'installation, RFC 3339.
     pub created: String,
     /// Versions épinglées au moment de l'installation.
@@ -31,6 +39,10 @@ pub struct RuntimeVersions {
 impl Manifest {
     pub fn gameid_or_default(&self) -> &str {
         self.gameid.as_deref().unwrap_or("umu-default")
+    }
+
+    pub fn store_or_none(&self) -> &str {
+        self.store.as_deref().unwrap_or("none")
     }
 
     pub fn load(path: &Path) -> io::Result<Self> {
@@ -97,6 +109,8 @@ mod tests {
             name: "WinMerge".into(),
             exe: "drive_c/Program Files/WinMerge/WinMergeU.exe".into(),
             gameid: None,
+            store: None,
+            store_id: None,
             created: "2026-07-07T18:00:00+02:00".into(),
             runtime: RuntimeVersions {
                 proton: "UMU-Proton-10.0-4".into(),
@@ -121,6 +135,8 @@ mod tests {
             name: "x".into(),
             exe: "x.exe".into(),
             gameid: Some("umu-244210".into()),
+            store: None,
+            store_id: None,
             created: String::new(),
             runtime: RuntimeVersions { proton: "p".into(), umu: "u".into() },
         };

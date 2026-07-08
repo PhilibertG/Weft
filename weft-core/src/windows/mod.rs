@@ -54,6 +54,24 @@ impl WindowsRoot {
     }
 }
 
+/// Options d'installation. `Default` = comportement 2.2 (installeur
+/// interactif, pas de correctifs par-jeu).
+#[derive(Debug, Clone, Default)]
+pub struct InstallOptions {
+    /// Id protonfixes (champ gameid du manifest).
+    pub gameid: Option<String>,
+    /// Store d'origine ("gog", "egs") pour la recherche de correctifs.
+    pub store: Option<String>,
+    /// Identifiant du jeu chez son store.
+    pub store_id: Option<String>,
+    /// Nom d'affichage imposé (les stores connaissent le vrai titre —
+    /// sinon, celui découvert dans le préfixe).
+    pub name: Option<String>,
+    /// Installeur exécuté sans assistant (flags silencieux Inno/NSIS/MSI).
+    /// Utilisé par les installs pilotées (GOG) où personne ne clique.
+    pub silent: bool,
+}
+
 /// Façade du moteur : installer, lancer, lister, supprimer.
 pub struct WindowsEngine {
     runtime: Runtime,
@@ -77,11 +95,11 @@ impl WindowsEngine {
     }
 
     /// Installe un programme Windows (installeur ou portable) dans son
-    /// préfixe isolé et l'enregistre. `gameid` optionnel (protonfixes).
+    /// préfixe isolé et l'enregistre.
     pub fn install(
         &self,
         file: &Path,
-        gameid: Option<String>,
+        opts: InstallOptions,
         mut progress: impl FnMut(&str),
     ) -> io::Result<InstalledApp> {
         if !self.runtime.status().ready() {
@@ -115,17 +133,41 @@ impl WindowsEngine {
                 copy_portable(file, &prefix)
             }
             installer::InstallerKind::Msi => {
-                progress("Installation (Windows Installer)… suis l'assistant s'il s'affiche.");
+                progress(if opts.silent {
+                    "Installation en cours…"
+                } else {
+                    "Installation (Windows Installer)… suis l'assistant s'il s'affiche."
+                });
+                let after: &[&str] = if opts.silent { &["/qn"] } else { &[] };
                 self.run_in_prefix_blocking(
                     &prefix,
                     &install_log,
                     &["msiexec", "/i"],
                     Some(file),
+                    after,
                 )
             }
-            installer::InstallerKind::Inno | installer::InstallerKind::Nsis => {
-                progress("Installation… suis l'assistant qui va s'afficher.");
-                self.run_in_prefix_blocking(&prefix, &install_log, &[], Some(file))
+            installer::InstallerKind::Inno => {
+                progress(if opts.silent {
+                    "Installation en cours…"
+                } else {
+                    "Installation… suis l'assistant qui va s'afficher."
+                });
+                let after: &[&str] = if opts.silent {
+                    &["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"]
+                } else {
+                    &[]
+                };
+                self.run_in_prefix_blocking(&prefix, &install_log, &[], Some(file), after)
+            }
+            installer::InstallerKind::Nsis => {
+                progress(if opts.silent {
+                    "Installation en cours…"
+                } else {
+                    "Installation… suis l'assistant qui va s'afficher."
+                });
+                let after: &[&str] = if opts.silent { &["/S"] } else { &[] };
+                self.run_in_prefix_blocking(&prefix, &install_log, &[], Some(file), after)
             }
         };
 
@@ -144,9 +186,11 @@ impl WindowsEngine {
         };
 
         let manifest = Manifest {
-            name: main.name.clone(),
+            name: opts.name.unwrap_or_else(|| main.name.clone()),
             exe: main.exe.clone(),
-            gameid,
+            gameid: opts.gameid,
+            store: opts.store,
+            store_id: opts.store_id,
             created: now_rfc3339(),
             runtime: RuntimeVersions {
                 proton: runtime::PINNED_PROTON.to_owned(),
@@ -248,7 +292,9 @@ impl WindowsEngine {
         cmd.env("WINEPREFIX", prefix)
             .env("PROTONPATH", proton)
             .env("GAMEID", manifest.gameid_or_default())
-            .env("STORE", "none");
+            // Le store d'origine route la recherche protonfixes
+            // (gamefixes-gog, gamefixes-egs...). "none" pour les autres.
+            .env("STORE", manifest.store_or_none());
         Ok(cmd)
     }
 
@@ -260,6 +306,7 @@ impl WindowsEngine {
         log_path: &Path,
         args: &[&str],
         file: Option<&Path>,
+        args_after: &[&str],
     ) -> io::Result<()> {
         let log = std::fs::File::create(log_path)?;
         let mut cmd = Command::new(self.runtime.umu_run());
@@ -267,6 +314,7 @@ impl WindowsEngine {
         if let Some(f) = file {
             cmd.arg(f);
         }
+        cmd.args(args_after);
         let status = cmd
             .env("WINEPREFIX", prefix)
             .env("PROTONPATH", self.runtime.proton_dir())

@@ -165,7 +165,7 @@ fn run_install(file: PathBuf, tx: mpsc::Sender<Event>) {
     }
 
     let result = engine
-        .install(&file, None, |m| send(Event::Progress(m.to_owned())))
+        .install(&file, Default::default(), |m| send(Event::Progress(m.to_owned())))
         .map(|app| app.manifest.name)
         .map_err(|e| e.to_string());
     send(Event::Done(result));
