@@ -1391,6 +1391,7 @@ dependencies = [
  "lnk",
  "nucleo-matcher",
  "serde",
+ "serde_json",
  "shell-words",
  "thiserror 2.0.18",
  "toml",

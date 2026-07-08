@@ -26,9 +26,16 @@ impl InstalledApp {
         self.dir.join("logs")
     }
 
-    /// Chemin absolu de l'exe principal.
+    /// Chemin absolu de l'exe principal. L'exe vit dans le préfixe
+    /// (installeurs classiques) ou dans le répertoire de l'app (jeux des
+    /// stores, posés dans `game/` hors du préfixe).
     pub fn exe_path(&self) -> PathBuf {
-        self.prefix_dir().join(&self.manifest.exe)
+        let in_prefix = self.prefix_dir().join(&self.manifest.exe);
+        if in_prefix.exists() {
+            in_prefix
+        } else {
+            self.dir.join(&self.manifest.exe)
+        }
     }
 
     /// L'icône extraite de l'exe, si l'extraction a réussi un jour.

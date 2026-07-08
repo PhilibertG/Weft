@@ -24,6 +24,9 @@ fn main() -> ExitCode {
         ["install", file] => install(root, file, None),
         ["install", file, "--gameid", gameid] => install(root, file, Some(gameid.to_owned())),
         ["run", slug] => run(root, slug),
+        ["epic", "login"] => epic_login(),
+        ["epic", "list"] => epic_list(),
+        ["epic", "install", app_name] => epic_install(root, app_name),
         ["refresh-icons"] => {
             let done = WindowsEngine::new(root).refresh_icons();
             println!("Icônes extraites : {}", if done.is_empty() { "aucune".to_owned() } else { done.join(", ") });
@@ -31,8 +34,50 @@ fn main() -> ExitCode {
         }
         _ => {
             eprintln!(
-                "usage: weft-windows <runtime status|runtime fetch|install <fichier> [--gameid <id>]|list|run <app>|remove <app>>"
+                "usage: weft-windows <runtime status|runtime fetch|install <fichier> [--gameid <id>]|list|run <app>|remove <app>|refresh-icons|epic login|epic list|epic install <jeu>>"
             );
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn epic_login() -> ExitCode {
+    if !weft_core::windows::epic::available() {
+        eprintln!("weft-windows : outil legendary manquant (pipx install legendary-gl)");
+        return ExitCode::FAILURE;
+    }
+    // Flux interactif de legendary (navigateur + code à coller) : on lui
+    // passe le terminal.
+    match std::process::Command::new("legendary").arg("auth").status() {
+        Ok(s) if s.success() => ExitCode::SUCCESS,
+        _ => ExitCode::FAILURE,
+    }
+}
+
+fn epic_list() -> ExitCode {
+    match weft_core::windows::epic::library() {
+        Ok(games) => {
+            for g in &games {
+                println!("{:<40} {}", g.app_name, g.title);
+            }
+            eprintln!("\n{} jeux — installer : weft-windows epic install <premier champ>", games.len());
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("weft-windows : {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn epic_install(root: WindowsRoot, app_name: &str) -> ExitCode {
+    match WindowsEngine::new(root).install_epic(app_name, |msg| println!("{msg}")) {
+        Ok(app) => {
+            println!("OK : « {} » — visible dans le launcher.", app.manifest.name);
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("weft-windows : {e}");
             ExitCode::FAILURE
         }
     }

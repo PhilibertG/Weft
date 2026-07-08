@@ -9,6 +9,7 @@
 //! implicite.
 
 pub mod discover;
+pub mod epic;
 pub mod icon;
 pub mod installer;
 pub mod manifest;
@@ -226,6 +227,99 @@ impl WindowsEngine {
         Ok(InstalledApp { slug, dir, manifest })
     }
 
+    /// Installe un jeu Epic via legendary : téléchargement dans
+    /// `apps/<slug>/game/`, préfixe isolé, gameid protonfixes depuis la
+    /// base umu (best-effort), manifest store=egs.
+    pub fn install_epic(
+        &self,
+        app_name: &str,
+        mut progress: impl FnMut(&str),
+    ) -> io::Result<InstalledApp> {
+        if !self.runtime.status().ready() {
+            return Err(io::Error::other(
+                "environnement Windows pas encore prêt (weft-windows runtime fetch)",
+            ));
+        }
+        if !epic::available() {
+            return Err(io::Error::other(
+                "support Epic non installé (outil legendary manquant)",
+            ));
+        }
+        if !epic::logged_in() {
+            return Err(io::Error::other(
+                "aucun compte Epic connecté (weft-windows epic login)",
+            ));
+        }
+        let title = epic::library()?
+            .into_iter()
+            .find(|g| g.app_name == app_name)
+            .ok_or_else(|| {
+                io::Error::other(format!("« {app_name} » n'est pas dans ta bibliothèque Epic"))
+            })?
+            .title;
+
+        // Réinstallation : même jeu déjà là => on repart de son slug.
+        let existing = self
+            .store
+            .list()
+            .into_iter()
+            .find(|a| a.manifest.store_id.as_deref() == Some(app_name));
+        let (slug, dir) = match existing {
+            Some(app) => {
+                progress(&format!("« {} » déjà installé : remplacement.", app.manifest.name));
+                self.store.remove(&app.slug)?;
+                self.store.create(&title)?
+            }
+            None => self.store.create(&title)?,
+        };
+
+        progress(&format!("Téléchargement de « {title} »…"));
+        let log = std::fs::File::create(dir.join("logs/install.log"))?;
+        let status = Command::new("legendary")
+            .args(["install", app_name, "-y", "--base-path"])
+            .arg(dir.join("game"))
+            .stdin(Stdio::null())
+            .stdout(log.try_clone()?)
+            .stderr(log)
+            .status()?;
+        if !status.success() {
+            let _ = self.store.remove(&slug);
+            return Err(io::Error::other("le téléchargement a échoué (connexion ?)"));
+        }
+
+        // Exe principal déclaré par Epic, exprimé relatif au dossier d'app.
+        let Some((install_path, exe)) = epic::installed_info(app_name) else {
+            let _ = self.store.remove(&slug);
+            return Err(io::Error::other("jeu téléchargé mais introuvable (legendary)"));
+        };
+        let exe_rel = match install_path.strip_prefix(&dir) {
+            Ok(rel) => format!("{}/{exe}", rel.display()),
+            Err(_) => format!("{}/{exe}", install_path.display()), // hors app : absolu
+        };
+
+        progress("Recherche de correctifs connus…");
+        let gameid = epic::umu_id(app_name, "egs");
+
+        let manifest = Manifest {
+            name: title,
+            exe: exe_rel,
+            gameid,
+            store: Some("egs".to_owned()),
+            store_id: Some(app_name.to_owned()),
+            created: now_rfc3339(),
+            runtime: RuntimeVersions {
+                proton: runtime::PINNED_PROTON.to_owned(),
+                umu: runtime::PINNED_UMU.to_owned(),
+            },
+        };
+        manifest.save(&dir.join("manifest.toml"))?;
+
+        let app = InstalledApp { slug, dir, manifest };
+        icon::extract_icon(&app.exe_path(), &app.dir.join("icon.png"));
+        progress(&format!("« {} » installé.", app.manifest.name));
+        Ok(app)
+    }
+
     /// Une app déjà installée qui est "le même programme" que celui qu'on
     /// vient d'installer sous `current_slug` : même nom ET même exe.
     fn find_same_app(&self, current_slug: &str, manifest: &Manifest) -> Option<String> {
@@ -252,16 +346,36 @@ impl WindowsEngine {
     }
 
     /// Lance une app installée, détachée, logs dans logs/launch.log.
+    ///
+    /// Jeux Epic : lancés PAR legendary (il injecte les arguments
+    /// d'authentification Epic Online Services) avec umu-run en wrapper —
+    /// même préfixe, même runtime épinglé, mêmes protonfixes.
     pub fn launch(&self, slug: &str) -> io::Result<()> {
         let app = self
             .store
             .get(slug)
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, format!("app inconnue : {slug}")))?;
 
+        let is_epic = app.manifest.store_or_none() == "egs" && app.manifest.store_id.is_some();
+        let mut cmd = if is_epic && epic::available() {
+            let mut c = Command::new("legendary");
+            c.args([
+                "launch",
+                app.manifest.store_id.as_deref().unwrap(),
+                "--no-wine",
+                "--wrapper",
+            ])
+            .arg(self.runtime.umu_run());
+            self.apply_umu_env(&mut c, &app.prefix_dir(), &app.manifest);
+            c
+        } else {
+            let mut c = self.umu_command(&app.prefix_dir(), &app.manifest);
+            c.arg(app.exe_path());
+            c
+        };
+
         let log = std::fs::File::create(app.logs_dir().join("launch.log"))?;
-        let mut cmd = self.umu_command(&app.prefix_dir(), &app.manifest)?;
-        cmd.arg(app.exe_path())
-            .stdin(Stdio::null())
+        cmd.stdin(Stdio::null())
             .stdout(log.try_clone()?)
             .stderr(log);
         {
@@ -272,9 +386,16 @@ impl WindowsEngine {
         Ok(())
     }
 
-    /// Commande umu-run configurée pour un préfixe : versions épinglées du
-    /// manifest si présentes sur disque, sinon celles de Weft.
-    fn umu_command(&self, prefix: &Path, manifest: &Manifest) -> io::Result<Command> {
+    /// Commande umu-run configurée pour un préfixe.
+    fn umu_command(&self, prefix: &Path, manifest: &Manifest) -> Command {
+        let mut cmd = Command::new(self.runtime.umu_run());
+        self.apply_umu_env(&mut cmd, prefix, manifest);
+        cmd
+    }
+
+    /// Variables d'environnement umu : versions épinglées du manifest si
+    /// présentes sur disque, sinon celles de Weft.
+    fn apply_umu_env(&self, cmd: &mut Command, prefix: &Path, manifest: &Manifest) {
         let pinned_dir = self
             .runtime
             .proton_dir()
@@ -288,14 +409,12 @@ impl WindowsEngine {
             // neuve) : on retombe sur la version épinglée de Weft.
             self.runtime.proton_dir()
         };
-        let mut cmd = Command::new(self.runtime.umu_run());
         cmd.env("WINEPREFIX", prefix)
             .env("PROTONPATH", proton)
             .env("GAMEID", manifest.gameid_or_default())
             // Le store d'origine route la recherche protonfixes
             // (gamefixes-gog, gamefixes-egs...). "none" pour les autres.
             .env("STORE", manifest.store_or_none());
-        Ok(cmd)
     }
 
     /// Exécute une commande dans le préfixe (installeur...), bloquant,
