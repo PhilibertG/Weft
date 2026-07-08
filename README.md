@@ -199,7 +199,9 @@ chaque étape étant ensuite validée sur machine réelle.
   fuzzy + frecency, calc, fichiers, daemon, config
 - [x] **Brique 2 (2.1, 2.2) — monde Windows** : moteur umu/Proton épinglé,
   préfixes isolés, install par double-clic, icônes
-- [ ] **Brique 2 (2.3)** : jeux GOG / Epic Games
+- [x] **Brique 2 (2.3) — GOG et Epic sans leurs launchers** : bibliothèques,
+  installation et lancement via legendary/lgogdownloader, correctifs
+  protonfixes par-jeu résolus automatiquement
 - [ ] **Brique 3** : cohérence visuelle cross-monde (theming unifié)
 - [ ] **Brique 4** : environnement de bureau
 - [ ] **Brique 5** : assemblage en image système bootable
