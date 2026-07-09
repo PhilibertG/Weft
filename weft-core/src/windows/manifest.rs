@@ -2,6 +2,7 @@
 //! racine du répertoire de l'app. C'est la source de vérité que lira
 //! l'AppSource "weft-windows" — et l'OS final plus tard.
 
+use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -28,6 +29,11 @@ pub struct Manifest {
     pub created: String,
     /// Versions épinglées au moment de l'installation.
     pub runtime: RuntimeVersions,
+    /// Variables d'environnement par-app au lancement (ex.
+    /// PROTON_USE_WINED3D=1 posé automatiquement pour les jeux 32 bits
+    /// quand l'hôte n'a pas de Vulkan i386). Jamais montré à l'utilisateur.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub env: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -116,6 +122,7 @@ mod tests {
                 proton: "UMU-Proton-10.0-4".into(),
                 umu: "1.4.1".into(),
             },
+            env: Default::default(),
         };
         let dir = std::env::temp_dir().join(format!("weft-manifest-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -139,6 +146,7 @@ mod tests {
             store_id: None,
             created: String::new(),
             runtime: RuntimeVersions { proton: "p".into(), umu: "u".into() },
+            env: Default::default(),
         };
         assert_eq!(m.gameid_or_default(), "umu-244210");
     }

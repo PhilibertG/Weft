@@ -71,6 +71,7 @@ mod tests {
             store_id: None,
             created: String::new(),
             runtime: RuntimeVersions { proton: "p".into(), umu: "u".into() },
+            env: Default::default(),
         }
         .save(&dir.join("manifest.toml"))
         .unwrap();

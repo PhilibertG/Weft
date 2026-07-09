@@ -50,6 +50,30 @@ pub fn detect(path: &Path) -> io::Result<InstallerKind> {
     Ok(InstallerKind::PortableExe)
 }
 
+/// Un exécutable PE est-il 32 bits ? (champ Machine du header COFF)
+/// None si le fichier n'est pas un PE lisible.
+pub fn is_32bit_pe(path: &Path) -> Option<bool> {
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut head = [0u8; 0x40];
+    file.read_exact(&mut head).ok()?;
+    if &head[..2] != b"MZ" {
+        return None;
+    }
+    let e_lfanew = u32::from_le_bytes(head[0x3C..0x40].try_into().ok()?) as u64;
+    file.seek(SeekFrom::Start(e_lfanew)).ok()?;
+    let mut pe = [0u8; 6]; // "PE\0\0" + Machine (u16)
+    file.read_exact(&mut pe).ok()?;
+    if &pe[..4] != b"PE\0\0" {
+        return None;
+    }
+    let machine = u16::from_le_bytes([pe[4], pe[5]]);
+    match machine {
+        0x014C => Some(true),  // i386
+        0x8664 | 0xAA64 => Some(false),
+        _ => None,
+    }
+}
+
 fn scan_for(file: &mut std::fs::File, needles: &[&[u8]]) -> io::Result<bool> {
     const CHUNK: usize = 1 << 20; // 1 Mo
     let overlap = needles.iter().map(|n| n.len()).max().unwrap_or(0);
@@ -125,6 +149,23 @@ mod tests {
             detect(&fixture("texte.txt", b"bonjour")).unwrap(),
             InstallerKind::Unknown
         );
+    }
+
+    #[test]
+    fn pe_bitness_is_detected() {
+        // PE synthétique minimal : MZ, e_lfanew=0x40, "PE\0\0", Machine.
+        let make_pe = |machine: u16| {
+            let mut b = vec![0u8; 0x46];
+            b[0] = b'M';
+            b[1] = b'Z';
+            b[0x3C..0x40].copy_from_slice(&0x40u32.to_le_bytes());
+            b[0x40..0x44].copy_from_slice(b"PE\0\0");
+            b[0x44..0x46].copy_from_slice(&machine.to_le_bytes());
+            b
+        };
+        assert_eq!(is_32bit_pe(&fixture("pe32.exe", &make_pe(0x014C))), Some(true));
+        assert_eq!(is_32bit_pe(&fixture("pe64.exe", &make_pe(0x8664))), Some(false));
+        assert_eq!(is_32bit_pe(&fixture("pas-pe.txt", b"bonjour")), None);
     }
 
     #[test]

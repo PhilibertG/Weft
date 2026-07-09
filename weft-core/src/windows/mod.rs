@@ -201,6 +201,7 @@ impl WindowsEngine {
                 proton: runtime::PINNED_PROTON.to_owned(),
                 umu: runtime::PINNED_UMU.to_owned(),
             },
+            env: Self::auto_env(&prefix.join(&main.exe)),
         };
 
         // Réinstallation du même programme (même nom, même exe) : on
@@ -304,6 +305,7 @@ impl WindowsEngine {
         progress("Recherche de correctifs connus…");
         let gameid = epic::umu_id(app_name, "egs");
 
+        let env = Self::auto_env(&dir.join(&exe_rel));
         let manifest = Manifest {
             name: title,
             exe: exe_rel,
@@ -315,6 +317,7 @@ impl WindowsEngine {
                 proton: runtime::PINNED_PROTON.to_owned(),
                 umu: runtime::PINNED_UMU.to_owned(),
             },
+            env,
         };
         manifest.save(&dir.join("manifest.toml"))?;
 
@@ -397,6 +400,18 @@ impl WindowsEngine {
 
     fn store_root(&self) -> PathBuf {
         self.store.root_path()
+    }
+
+    /// Réglages par-app décidés à l'installation, pour que le jeu marche
+    /// SANS que l'utilisateur ne voie quoi que ce soit : un exe 32 bits
+    /// sur un hôte sans pilotes Vulkan i386 ferait crasher DXVK (dxgi
+    /// access violation) => bascule OpenGL (PROTON_USE_WINED3D).
+    fn auto_env(exe_abs: &Path) -> std::collections::BTreeMap<String, String> {
+        let mut env = std::collections::BTreeMap::new();
+        if installer::is_32bit_pe(exe_abs) == Some(true) && !host_has_vulkan32() {
+            env.insert("PROTON_USE_WINED3D".to_owned(), "1".to_owned());
+        }
+        env
     }
 
     /// Une app déjà installée qui est "le même programme" que celui qu'on
@@ -494,6 +509,10 @@ impl WindowsEngine {
             // Le store d'origine route la recherche protonfixes
             // (gamefixes-gog, gamefixes-egs...). "none" pour les autres.
             .env("STORE", manifest.store_or_none());
+        // Réglages par-app (ex. bascule OpenGL des jeux 32 bits).
+        for (k, v) in &manifest.env {
+            cmd.env(k, v);
+        }
     }
 
     /// Exécute une commande dans le préfixe (installeur...), bloquant,
@@ -592,6 +611,20 @@ fn is_common_dir(dir: &Path) -> bool {
         "Images", "Pictures", "Videos", "Vidéos", "Musique", "Music",
     ];
     home.is_some_and(|h| COMMON.iter().any(|n| h.join(n) == dir))
+}
+
+/// L'hôte a-t-il des pilotes Vulkan 32 bits ? (pressure-vessel importe les
+/// pilotes GPU de l'hôte : sans eux, DXVK 32 bits n'a rien sous les pieds)
+fn host_has_vulkan32() -> bool {
+    ["/usr/lib/i386-linux-gnu", "/usr/lib32"].iter().any(|dir| {
+        std::fs::read_dir(dir).is_ok_and(|read| {
+            read.flatten().any(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with("libvulkan")
+            })
+        })
+    })
 }
 
 fn copy_dir_recursive(src: &Path, dest: &Path) -> io::Result<()> {
