@@ -149,11 +149,20 @@ fn build_ui(app: &adw::Application) -> gtk::ApplicationWindow {
     window.maximize();
 
     // Cliquer dans la zone transparente (hors surface) ferme l'overlay.
+    // Test géométrique en phase capture : si le point pressé est hors des
+    // limites de la surface, on ferme — aucun pari sur le picking GTK.
     let outside_click = gtk::GestureClick::new();
-    outside_click.set_propagation_phase(gtk::PropagationPhase::Target);
+    outside_click.set_propagation_phase(gtk::PropagationPhase::Capture);
     outside_click.connect_pressed(glib::clone!(
-        #[weak] window,
-        move |_, _, _, _| window.close()
+        #[weak] window, #[weak] root, #[weak] backdrop,
+        move |_, _, x, y| {
+            let outside = root
+                .compute_bounds(&backdrop)
+                .is_none_or(|b| !b.contains_point(&gtk::graphene::Point::new(x as f32, y as f32)));
+            if outside {
+                window.close();
+            }
+        }
     ));
     backdrop.add_controller(outside_click);
     // Échap / lancement : on cache, on ne quitte pas — c'est ce qui rend la
@@ -342,6 +351,19 @@ fn make_row(item: &ResultItem) -> gtk::ListBoxRow {
     let row_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     row_box.append(&icon);
     row_box.append(&text);
+
+    // Action clavier, visible uniquement sur la ligne sélectionnée
+    // (row:selected .weft-hint dans le CSS — aucun état côté Rust).
+    let verb = match &item.action {
+        Action::CopyText(_) => "copier",
+        Action::OpenPath(_) => "ouvrir",
+        Action::Launch(_) => "lancer",
+    };
+    let hint = gtk::Label::new(Some(&format!("↵ {verb}")));
+    hint.add_css_class("weft-hint");
+    hint.set_halign(gtk::Align::End);
+    hint.set_hexpand(true);
+    row_box.append(&hint);
 
     let row = gtk::ListBoxRow::builder().child(&row_box).build();
     row.add_css_class("weft-row");
