@@ -54,6 +54,7 @@ Aujourd'hui, Weft fournit deux briques fonctionnelles :
 - Bibliothèques Steam, y compris les jeux Windows via Proton (l'outillage
   Proton/runtimes est filtré), clients natif et Flatpak supportés
 - Programmes Windows installés par Weft
+- Jeux **GOG** et **Epic Games** — sans installer leurs launchers
 
 **Moteur Windows**
 
@@ -67,6 +68,13 @@ Aujourd'hui, Weft fournit deux briques fonctionnelles :
 - Aucune dépendance i386 sur l'hôte : tout tourne dans le conteneur Steam
   Linux Runtime
 - Icônes extraites des ressources des exécutables
+- Jeux GOG : téléchargement de l'installeur offline officiel
+  (lgogdownloader) puis installation silencieuse — DRM-free, aucun client
+- Jeux Epic : téléchargement et authentification via legendary, correctifs
+  par-jeu [protonfixes](https://github.com/Open-Wine-Components/umu-protonfixes)
+  résolus automatiquement depuis la base umu
+- Réglages par-app automatiques : un jeu 32 bits sur un hôte sans pilotes
+  Vulkan i386 bascule tout seul en rendu OpenGL
 - Échec d'installation → message honnête et nettoyage complet, jamais de
   stacktrace ni d'app fantôme
 
@@ -79,6 +87,14 @@ Aujourd'hui, Weft fournit deux briques fonctionnelles :
   - `plocate` — recherche de fichiers
   - `icoutils` — extraction d'icônes des programmes Windows
   - `python3` — requis par umu pour le monde Windows
+  - [legendary](https://github.com/legendary-gl/legendary)
+    (`pipx install legendary-gl`) — jeux Epic Games
+  - [lgogdownloader](https://github.com/Sude-/lgogdownloader) **≥ 3.15** —
+    jeux GOG (le 3.12 des dépôts Ubuntu 24.04 a un bug fatal sur les
+    métadonnées de jeux ; compilez une version récente)
+  - pilotes graphiques 32 bits (`libgl1:i386`, `mesa-vulkan-drivers:i386`)
+    pour les jeux Windows 32 bits — sinon bascule OpenGL automatique,
+    voire échec si l'hôte n'a aucun pilote i386
 
 ## Installation
 
@@ -145,7 +161,16 @@ weft-windows install app.exe     # installer (installeur ou portable)
 weft-windows list                # apps installées
 weft-windows run <app>           # lancer
 weft-windows remove <app>        # supprimer (environnement compris)
+
+weft-windows epic login          # connexion Epic (une fois, via navigateur)
+weft-windows epic list           # bibliothèque Epic
+weft-windows epic install <jeu>  # installer un jeu Epic
+weft-windows gog login           # connexion GOG (une fois)
+weft-windows gog list            # bibliothèque GOG
+weft-windows gog install <jeu>   # installer un jeu GOG
 ```
+
+Les jeux installés apparaissent dans le launcher comme tout le reste.
 
 > [!NOTE]
 > Le premier usage du monde Windows télécharge le runtime (~1 Go). L'UI
