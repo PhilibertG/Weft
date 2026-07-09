@@ -115,3 +115,9 @@ window.weft-window {
   font-size: 12px;
   color: alpha(@weft_fg, 0.5);
 }
+
+/* Icône de secours (app sans icône) : discrète, assume le manque. */
+.weft-icon-dim {
+  color: alpha(@weft_fg, 0.75);
+  opacity: 0.45;
+}

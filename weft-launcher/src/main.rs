@@ -149,22 +149,23 @@ fn build_ui(app: &adw::Application) -> gtk::ApplicationWindow {
     window.maximize();
 
     // Cliquer dans la zone transparente (hors surface) ferme l'overlay.
-    // Test géométrique en phase capture : si le point pressé est hors des
-    // limites de la surface, on ferme — aucun pari sur le picking GTK.
+    // Gesture en phase capture sur la FENÊTRE : elle est toujours sur le
+    // chemin de l'événement, quel que soit le widget cliqué ; test
+    // géométrique contre les limites de la surface.
     let outside_click = gtk::GestureClick::new();
     outside_click.set_propagation_phase(gtk::PropagationPhase::Capture);
     outside_click.connect_pressed(glib::clone!(
-        #[weak] window, #[weak] root, #[weak] backdrop,
+        #[weak] window, #[weak] root,
         move |_, _, x, y| {
             let outside = root
-                .compute_bounds(&backdrop)
+                .compute_bounds(&window)
                 .is_none_or(|b| !b.contains_point(&gtk::graphene::Point::new(x as f32, y as f32)));
             if outside {
                 window.close();
             }
         }
     ));
-    backdrop.add_controller(outside_click);
+    window.add_controller(outside_click);
     // Échap / lancement : on cache, on ne quitte pas — c'est ce qui rend la
     // réapparition instantanée.
     window.set_hide_on_close(true);
@@ -323,9 +324,21 @@ fn refresh_list(state: &Rc<RefCell<State>>, list: &gtk::ListBox, query: &str) {
     list.select_row(list.row_at_index(0).as_ref());
 }
 
+/// Côté du gabarit d'icône : toutes les icônes occupent exactement cette
+/// empreinte, la colonne de gauche reste parfaitement alignée.
+const ICON_SIZE: i32 = 32;
+
 fn make_row(item: &ResultItem) -> gtk::ListBoxRow {
     let icon = row_icon(item);
-    icon.set_pixel_size(32);
+    icon.set_pixel_size(ICON_SIZE);
+    icon.set_halign(gtk::Align::Center);
+    icon.set_valign(gtk::Align::Center);
+    // Gabarit strict : l'image vit dans une case de taille fixe.
+    let slot = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    slot.set_size_request(ICON_SIZE, ICON_SIZE);
+    slot.set_valign(gtk::Align::Center);
+    slot.append(&icon);
+    let icon = slot;
 
     let name = gtk::Label::builder()
         .label(&item.title)
@@ -380,7 +393,7 @@ fn row_icon(item: &ResultItem) -> gtk::Image {
             if in_theme {
                 gtk::Image::from_icon_name(name)
             } else {
-                gtk::Image::from_icon_name("application-x-executable-symbolic")
+                fallback_icon()
             }
         }
         Some(Icon::Path(path)) => gtk::Image::from_file(path),
@@ -391,10 +404,18 @@ fn row_icon(item: &ResultItem) -> gtk::Image {
                 let (ctype, _) = gtk::gio::functions::content_type_guess(Some(path), &[]);
                 gtk::Image::from_gicon(&gtk::gio::functions::content_type_get_icon(&ctype))
             } else {
-                gtk::Image::from_icon_name("application-x-executable-symbolic")
+                fallback_icon()
             }
         }
     }
+}
+
+/// Icône de secours : symbolique, atténuée par le CSS — assume son statut
+/// de fallback au lieu d'imiter une vraie icône.
+fn fallback_icon() -> gtk::Image {
+    let img = gtk::Image::from_icon_name("application-x-executable-symbolic");
+    img.add_css_class("weft-icon-dim");
+    img
 }
 
 fn launch_row(state: &Rc<RefCell<State>>, row_index: i32, window: &gtk::ApplicationWindow) {
