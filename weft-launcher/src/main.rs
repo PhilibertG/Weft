@@ -20,9 +20,6 @@ use weft_core::{Action, Activation, Config, Hit, Registry, ResultItem};
 
 const APP_ID: &str = "dev.weft.Launcher";
 
-/// Marge transparente autour de la surface, où se dessine l'ombre portée
-/// (l'ombre CSS de theme.css doit rester plus petite que cette marge).
-const SHADOW_MARGIN: i32 = 28;
 
 /// Debounce du watch : on attend ce silence avant de re-scanner. Généreux
 /// exprès — pendant un téléchargement Steam les manifests sont réécrits en
@@ -118,10 +115,12 @@ fn build_ui(app: &adw::Application) -> gtk::ApplicationWindow {
 
     let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
     root.add_css_class("weft-root");
-    root.set_margin_top(SHADOW_MARGIN);
-    root.set_margin_bottom(SHADOW_MARGIN);
-    root.set_margin_start(SHADOW_MARGIN);
-    root.set_margin_end(SHADOW_MARGIN);
+    // Wayland interdit de positionner une fenêtre : la fenêtre est donc
+    // maximisée et transparente, et c'est la surface qui se centre dedans
+    // (l'ombre CSS se dessine librement dans la zone transparente).
+    root.set_halign(gtk::Align::Center);
+    root.set_valign(gtk::Align::Center);
+    root.set_size_request(cfg.window.width, cfg.window.height);
     root.append(&entry);
     let separator = gtk::Separator::new(gtk::Orientation::Horizontal);
     separator.add_css_class("weft-separator");
@@ -131,13 +130,21 @@ fn build_ui(app: &adw::Application) -> gtk::ApplicationWindow {
     let window = gtk::ApplicationWindow::builder()
         .application(app)
         .title("Weft")
-        .default_width(cfg.window.width + 2 * SHADOW_MARGIN)
-        .default_height(cfg.window.height + 2 * SHADOW_MARGIN)
         .resizable(false)
         .decorated(false)
         .child(&root)
         .build();
     window.add_css_class("weft-window");
+    window.maximize();
+
+    // Cliquer dans la zone transparente (hors surface) ferme l'overlay.
+    let outside_click = gtk::GestureClick::new();
+    outside_click.set_propagation_phase(gtk::PropagationPhase::Target);
+    outside_click.connect_pressed(glib::clone!(
+        #[weak] window,
+        move |_, _, _, _| window.close()
+    ));
+    window.add_controller(outside_click);
     // Échap / lancement : on cache, on ne quitte pas — c'est ce qui rend la
     // réapparition instantanée.
     window.set_hide_on_close(true);

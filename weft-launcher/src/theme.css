@@ -72,6 +72,12 @@ window.weft-window {
   background: transparent;
 }
 
+/* Sélection neutre provisoire (raffinée à l'incrément C) : tue le bloc
+   d'accent Adwaita/Yaru. */
+.weft-list row:selected {
+  background: alpha(white, 0.07);
+}
+
 .weft-row {
   padding: 8px 14px;
   border-radius: 10px;
