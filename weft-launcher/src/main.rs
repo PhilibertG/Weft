@@ -407,6 +407,23 @@ fn load_css() {
                 gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
             );
             eprintln!("weft: thème chargé (display {})", display.name());
+
+            // Override utilisateur : ~/.config/weft/theme.css, appliqué
+            // par-dessus le thème embarqué. Permet d'itérer sur les tokens
+            // (accent, fond...) avec un simple restart, sans recompiler.
+            if let Some(path) = weft_core::config::config_path()
+                .map(|p| p.with_file_name("theme.css"))
+                .filter(|p| p.is_file())
+            {
+                let user = gtk::CssProvider::new();
+                user.load_from_path(&path);
+                gtk::style_context_add_provider_for_display(
+                    &display,
+                    &user,
+                    gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1,
+                );
+                eprintln!("weft: override utilisateur chargé ({})", path.display());
+            }
         }
         // Sans display au démarrage (daemon lancé très tôt dans la
         // session), le thème ne serait jamais appliqué : trace claire.
