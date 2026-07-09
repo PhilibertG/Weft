@@ -1,0 +1,89 @@
+/* =====================================================================
+   Thème Weft — TOUS les tokens visuels vivent ici.
+   Direction : codes Raycast, fond sombre opaque (étape statique).
+
+   Tokens rapides :
+   - couleurs        → bloc @define-color ci-dessous
+   - rayon surface   → .weft-root border-radius (16px)
+   - rayon sélection → .weft-list row border-radius (10px)
+   - espacements     → margins/paddings commentés section par section
+   - typographie     → .weft-name / .weft-desc / .weft-entry font-size
+   (la marge d'ombre de la fenêtre est SHADOW_MARGIN dans main.rs,
+    l'ombre ci-dessous doit rester plus petite qu'elle)
+   ===================================================================== */
+
+/* ------------------------------- couleurs -------------------------- */
+@define-color weft_bg #1d1e21;      /* fond de surface : gris très foncé */
+@define-color weft_fg #ececec;      /* texte principal */
+@define-color weft_accent #ff6363;  /* accent unique (Raycast) — À CHANGER ICI */
+
+/* --------------------------- surface flottante ---------------------- */
+/* La fenêtre est transparente et plus grande que la surface : la marge
+   (SHADOW_MARGIN côté Rust) laisse la place à l'ombre portée. */
+window.weft-window {
+  background: transparent;
+}
+
+.weft-root {
+  background-color: @weft_bg;
+  color: @weft_fg;
+  border-radius: 16px;
+  border: 1px solid alpha(white, 0.08);
+  box-shadow: 0 24px 56px 0 alpha(black, 0.55),
+              0 4px 18px 0 alpha(black, 0.35);
+}
+
+/* --------------------------- barre de recherche --------------------- */
+/* Fondue dans la surface : aucun cadre, aucun fond, curseur fin. */
+.weft-entry,
+.weft-entry:focus,
+.weft-entry:focus-within {
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  color: @weft_fg;
+  caret-color: @weft_fg;
+  font-size: 17px;
+  min-height: 46px;
+  margin: 8px 12px 4px 12px; /* espace autour de la zone de saisie */
+}
+
+.weft-entry placeholder {
+  color: alpha(@weft_fg, 0.32);
+}
+
+/* loupe et bouton effacer : présents mais discrets */
+.weft-entry > image {
+  opacity: 0.35;
+  color: @weft_fg;
+}
+
+/* trait fin entre la recherche et les résultats */
+.weft-separator {
+  background-color: alpha(white, 0.07);
+  min-height: 1px;
+  margin: 0 6px;
+}
+
+/* ------------------------------ résultats --------------------------- */
+.weft-list,
+.weft-list row {
+  background: transparent;
+}
+
+.weft-row {
+  padding: 8px 14px;
+  border-radius: 10px;
+  margin: 0 8px;
+}
+
+.weft-name {
+  font-size: 15px;
+  color: @weft_fg;
+}
+
+.weft-desc {
+  font-size: 12px;
+  color: alpha(@weft_fg, 0.55);
+}

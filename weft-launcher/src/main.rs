@@ -20,6 +20,10 @@ use weft_core::{Action, Activation, Config, Hit, Registry, ResultItem};
 
 const APP_ID: &str = "dev.weft.Launcher";
 
+/// Marge transparente autour de la surface, où se dessine l'ombre portée
+/// (l'ombre CSS de theme.css doit rester plus petite que cette marge).
+const SHADOW_MARGIN: i32 = 28;
+
 /// Debounce du watch : on attend ce silence avant de re-scanner. Généreux
 /// exprès — pendant un téléchargement Steam les manifests sont réécrits en
 /// continu, il ne faut pas reconstruire l'index en boucle.
@@ -57,7 +61,12 @@ fn main() -> glib::ExitCode {
         }
     }
 
-    app.connect_startup(|_| load_css());
+    app.connect_startup(|_| {
+        // Surface sombre opaque quelle que soit la préférence GNOME :
+        // l'identité visuelle de Weft ne suit pas le thème du bureau.
+        adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceDark);
+        load_css();
+    });
     app.connect_activate(activate);
     // GApplication consommerait argv ; on ne lui passe rien.
     app.run_with_args::<String>(&[])
@@ -109,14 +118,21 @@ fn build_ui(app: &adw::Application) -> gtk::ApplicationWindow {
 
     let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
     root.add_css_class("weft-root");
+    root.set_margin_top(SHADOW_MARGIN);
+    root.set_margin_bottom(SHADOW_MARGIN);
+    root.set_margin_start(SHADOW_MARGIN);
+    root.set_margin_end(SHADOW_MARGIN);
     root.append(&entry);
+    let separator = gtk::Separator::new(gtk::Orientation::Horizontal);
+    separator.add_css_class("weft-separator");
+    root.append(&separator);
     root.append(&scroller);
 
     let window = gtk::ApplicationWindow::builder()
         .application(app)
         .title("Weft")
-        .default_width(cfg.window.width)
-        .default_height(cfg.window.height)
+        .default_width(cfg.window.width + 2 * SHADOW_MARGIN)
+        .default_height(cfg.window.height + 2 * SHADOW_MARGIN)
         .resizable(false)
         .decorated(false)
         .child(&root)
@@ -371,25 +387,8 @@ fn ui_parts(window: &gtk::Window) -> (Rc<RefCell<State>>, gtk::SearchEntry, gtk:
 
 fn load_css() {
     let provider = gtk::CssProvider::new();
-    provider.load_from_string(
-        "
-        window.weft-window { background: transparent; }
-        .weft-root {
-            background-color: @window_bg_color;
-            border-radius: 14px;
-            border: 1px solid alpha(@borders, 0.6);
-        }
-        .weft-entry {
-            margin: 12px;
-            min-height: 44px;
-            font-size: 17px;
-        }
-        .weft-list, .weft-list row { background: transparent; }
-        .weft-row { padding: 8px 14px; border-radius: 10px; margin: 0 8px; }
-        .weft-name { font-size: 15px; }
-        .weft-desc { font-size: 12px; }
-        ",
-    );
+    // Tous les tokens visuels vivent dans theme.css, embarqué au build.
+    provider.load_from_string(include_str!("theme.css"));
     if let Some(display) = gtk::gdk::Display::default() {
         gtk::style_context_add_provider_for_display(
             &display,
