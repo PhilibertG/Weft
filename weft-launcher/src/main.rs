@@ -123,6 +123,8 @@ fn build_ui(app: &adw::Application) -> gtk::ApplicationWindow {
     // (l'ombre CSS se dessine librement dans la zone transparente).
     root.set_halign(gtk::Align::Center);
     root.set_valign(gtk::Align::Center);
+    root.set_hexpand(true);
+    root.set_vexpand(true);
     root.set_size_request(cfg.window.width, cfg.window.height);
     root.append(&entry);
     let separator = gtk::Separator::new(gtk::Orientation::Horizontal);
@@ -130,12 +132,18 @@ fn build_ui(app: &adw::Application) -> gtk::ApplicationWindow {
     root.append(&separator);
     root.append(&scroller);
 
+    // Zone transparente pleine fenêtre autour de la surface : c'est elle
+    // qui reçoit les clics "à côté" (une fenêtre GTK n'est pas une cible
+    // de clic elle-même, il faut un widget).
+    let backdrop = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    backdrop.append(&root);
+
     let window = gtk::ApplicationWindow::builder()
         .application(app)
         .title("Weft")
         .resizable(false)
         .decorated(false)
-        .child(&root)
+        .child(&backdrop)
         .build();
     window.add_css_class("weft-window");
     window.maximize();
@@ -147,7 +155,7 @@ fn build_ui(app: &adw::Application) -> gtk::ApplicationWindow {
         #[weak] window,
         move |_, _, _, _| window.close()
     ));
-    window.add_controller(outside_click);
+    backdrop.add_controller(outside_click);
     // Échap / lancement : on cache, on ne quitte pas — c'est ce qui rend la
     // réapparition instantanée.
     window.set_hide_on_close(true);

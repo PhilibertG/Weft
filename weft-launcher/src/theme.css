@@ -67,9 +67,15 @@ window.weft-window {
 }
 
 /* ------------------------------ résultats --------------------------- */
+/* Rythme vertical : lignes hautes, air entre elles, padding franc.
+   L'espace vide fait le premium — ne pas entasser. */
 .weft-list,
 .weft-list row {
   background: transparent;
+}
+
+.weft-list {
+  padding: 6px 0 10px 0; /* respiration au-dessus et sous la liste */
 }
 
 /* Sélection neutre provisoire (raffinée à l'incrément C) : tue le bloc
@@ -79,17 +85,21 @@ window.weft-window {
 }
 
 .weft-row {
-  padding: 8px 14px;
+  padding: 9px 14px;      /* hauteur de ligne confortable */
   border-radius: 10px;
-  margin: 0 8px;
+  margin: 1px 10px;        /* air entre les lignes + retrait latéral */
+  min-height: 44px;
 }
 
+/* Deux niveaux typographiques, pas plus : titre medium, sous-titre
+   plus petit et grisé. La police est celle du système (sans-serif). */
 .weft-name {
-  font-size: 15px;
+  font-size: 14.5px;
+  font-weight: 500;
   color: @weft_fg;
 }
 
 .weft-desc {
   font-size: 12px;
-  color: alpha(@weft_fg, 0.55);
+  color: alpha(@weft_fg, 0.5);
 }
