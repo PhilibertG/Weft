@@ -49,6 +49,17 @@ fn main() -> glib::ExitCode {
 
     let app = adw::Application::builder().application_id(APP_ID).build();
 
+    // IMPORTANT : les handlers AVANT tout register() — g_application_register
+    // émet startup immédiatement, un handler connecté après ne tourne jamais
+    // (bug historique : le daemon démarrait sans thème).
+    app.connect_startup(|_| {
+        // Surface sombre opaque quelle que soit la préférence GNOME :
+        // l'identité visuelle de Weft ne suit pas le thème du bureau.
+        adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceDark);
+        load_css();
+    });
+    app.connect_activate(activate);
+
     // Un démarrage --daemon alors qu'une instance tourne déjà ne doit PAS
     // faire surgir sa fenêtre : on sort avant toute activation.
     if DAEMON_START.load(Ordering::SeqCst) {
@@ -57,14 +68,6 @@ fn main() -> glib::ExitCode {
             return glib::ExitCode::SUCCESS;
         }
     }
-
-    app.connect_startup(|_| {
-        // Surface sombre opaque quelle que soit la préférence GNOME :
-        // l'identité visuelle de Weft ne suit pas le thème du bureau.
-        adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceDark);
-        load_css();
-    });
-    app.connect_activate(activate);
     // GApplication consommerait argv ; on ne lui passe rien.
     app.run_with_args::<String>(&[])
 }
@@ -396,12 +399,18 @@ fn load_css() {
     let provider = gtk::CssProvider::new();
     // Tous les tokens visuels vivent dans theme.css, embarqué au build.
     provider.load_from_string(include_str!("theme.css"));
-    if let Some(display) = gtk::gdk::Display::default() {
-        gtk::style_context_add_provider_for_display(
-            &display,
-            &provider,
-            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
+    match gtk::gdk::Display::default() {
+        Some(display) => {
+            gtk::style_context_add_provider_for_display(
+                &display,
+                &provider,
+                gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+            );
+            eprintln!("weft: thème chargé (display {})", display.name());
+        }
+        // Sans display au démarrage (daemon lancé très tôt dans la
+        // session), le thème ne serait jamais appliqué : trace claire.
+        None => eprintln!("weft: PAS de display au chargement du thème !"),
     }
 }
 
