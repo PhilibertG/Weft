@@ -138,15 +138,24 @@ fn build_ui(app: &adw::Application) -> gtk::ApplicationWindow {
     let backdrop = gtk::Box::new(gtk::Orientation::Vertical, 0);
     backdrop.append(&root);
 
+    // PAS de resizable(false) : mutter refuse de maximiser une fenêtre
+    // non redimensionnable, et l'overlay resterait ancré en haut à gauche.
     let window = gtk::ApplicationWindow::builder()
         .application(app)
         .title("Weft")
-        .resizable(false)
         .decorated(false)
         .child(&backdrop)
         .build();
     window.add_css_class("weft-window");
     window.maximize();
+
+    // Perte de focus => fermeture (comportement Raycast/Spotlight) :
+    // couvre aussi le clic hors fenêtre, où que l'événement atterrisse.
+    window.connect_is_active_notify(|w| {
+        if !w.is_active() && w.is_visible() {
+            w.close();
+        }
+    });
 
     // Cliquer dans la zone transparente (hors surface) ferme l'overlay.
     // Gesture en phase capture sur la FENÊTRE : elle est toujours sur le
