@@ -1,0 +1,57 @@
+# Build le paquet .deb au tag et l'attache à une GitHub Release.
+# Déclenché uniquement sur un tag v* (ex. git tag v0.1.0 && git push --tags).
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write  # nécessaire pour créer la Release et attacher l'asset
+
+jobs:
+  deb:
+    runs-on: ubuntu-24.04  # même base que la cible (GTK4/libadwaita récents)
+    steps:
+      - uses: actions/checkout@v4
+
+      # Dépendances de build : libs GTK4/libadwaita de dev pour lier les
+      # binaires (le .deb, lui, ne dépendra que des libs runtime).
+      - name: Dépendances système
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-4-dev libadwaita-1-dev
+
+      - name: Toolchain Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Installer cargo-deb
+        run: cargo install cargo-deb --locked
+
+      - name: Build release (3 binaires)
+        run: cargo build --release
+
+      - name: Générer le .deb
+        run: cargo deb -p weft-launcher --no-build
+
+      - name: Publier la Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/debian/*.deb
+          body: |
+            ## Installation
+
+            Téléchargez le `.deb` ci-dessous, puis :
+
+            ```bash
+            sudo apt install ./weft_*_amd64.deb
+            ```
+
+            Lancez **Weft** depuis la grille d'applications : un assistant
+            configure le raccourci clavier, le démarrage automatique et le
+            reste. Voir le [README](https://github.com/PhilibertG/Weft#readme).

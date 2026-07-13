@@ -81,12 +81,12 @@ Aujourd'hui, Weft fournit deux briques fonctionnelles :
 ## Prérequis
 
 - Linux avec Wayland ou X11 — développé et testé sur Ubuntu 24.04 / GNOME
-- [Rust](https://rustup.rs) (édition 2021)
-- GTK4 et libadwaita (dev) : `sudo apt install libgtk-4-dev libadwaita-1-dev`
-- Optionnels, avec dégradation propre s'ils manquent :
+- Les dépendances runtime (GTK4, libadwaita, python3…) sont tirées
+  automatiquement par le paquet `.deb`
+- Optionnels, avec dégradation propre s'ils manquent (l'assistant ou le
+  paquet les recommandent) :
   - `plocate` — recherche de fichiers
   - `icoutils` — extraction d'icônes des programmes Windows
-  - `python3` — requis par umu pour le monde Windows
   - [legendary](https://github.com/legendary-gl/legendary)
     (`pipx install legendary-gl`) — jeux Epic Games
   - [lgogdownloader](https://github.com/Sude-/lgogdownloader) **≥ 3.15** —
@@ -95,51 +95,38 @@ Aujourd'hui, Weft fournit deux briques fonctionnelles :
   - pilotes graphiques 32 bits (`libgl1:i386`, `mesa-vulkan-drivers:i386`)
     pour les jeux Windows 32 bits — sinon bascule OpenGL automatique,
     voire échec si l'hôte n'a aucun pilote i386
+- Pour **construire depuis les sources** : [Rust](https://rustup.rs)
+  (édition 2021) et `sudo apt install libgtk-4-dev libadwaita-1-dev`
 
 ## Installation
+
+Téléchargez le `.deb` depuis la
+[dernière release](https://github.com/PhilibertG/Weft/releases/latest),
+puis :
+
+```bash
+sudo apt install ./weft_*_amd64.deb
+```
+
+Le paquet embarque les trois binaires (aucune toolchain Rust requise), le
+service de session, le profil AppArmor et le handler `.exe`/`.msi`.
+
+Lancez ensuite **Weft** depuis la grille d'applications : un **assistant de
+premier lancement** configure ce qui relève de votre session — raccourci
+clavier (<kbd>Super</kbd>+<kbd>Entrée</kbd>), démarrage automatique,
+association des programmes Windows — et propose de télécharger
+l'environnement Windows. Tout y est facultatif et idempotent ; on peut le
+relancer avec `weft-launcher --setup`.
+
+### Construire depuis les sources
 
 ```bash
 git clone https://github.com/PhilibertG/Weft.git
 cd Weft
-
-# Les trois binaires : launcher, moteur Windows (CLI), UI d'installation
-cargo install --path weft-launcher
-cargo install --path weft-windows
-cargo install --path weft-installer
+cargo install cargo-deb
+cargo build --release
+cargo deb -p weft-launcher --no-build   # → target/debian/weft_*.deb
 ```
-
-**Daemon de session** (apparition instantanée au raccourci) :
-
-```bash
-cp packaging/weft-launcher.service ~/.config/systemd/user/
-systemctl --user daemon-reload
-systemctl --user enable --now weft-launcher
-```
-
-**Raccourci clavier** : Paramètres GNOME → Clavier → Raccourcis
-personnalisés → commande `~/.cargo/bin/weft-launcher` (suggestion :
-<kbd>Super</kbd>+<kbd>Entrée</kbd>).
-
-**Double-clic sur les .exe/.msi** :
-
-```bash
-sed "s|@WEFT_BIN@|$HOME/.cargo/bin|" packaging/weft-installer.desktop \
-  > ~/.local/share/applications/weft-installer.desktop
-update-desktop-database ~/.local/share/applications
-xdg-mime default weft-installer.desktop \
-  application/vnd.microsoft.portable-executable \
-  application/x-ms-dos-executable application/x-msdownload application/x-msi
-```
-
-> [!IMPORTANT]
-> Sur Ubuntu 24.04+, la restriction AppArmor des user namespaces empêche le
-> daemon de créer le conteneur d'exécution Windows. Installez le profil
-> fourni (même modèle que le profil `steam` d'Ubuntu) :
->
-> ```bash
-> sudo cp packaging/apparmor-weft-umu /etc/apparmor.d/weft-umu
-> sudo apparmor_parser -r /etc/apparmor.d/weft-umu
-> ```
 
 ## Utilisation
 
