@@ -18,6 +18,8 @@ use gtk::pango;
 use weft_core::model::Icon;
 use weft_core::{Action, Activation, Config, Hit, Registry, ResultItem};
 
+mod setup;
+
 const APP_ID: &str = "dev.weft.Launcher";
 
 
@@ -43,8 +45,17 @@ fn main() -> glib::ExitCode {
     if args.get(1).is_some_and(|a| a == "--list") {
         return debug_list(args.get(2).map(String::as_str).unwrap_or(""));
     }
+    // Assistant à la demande.
+    if args.get(1).is_some_and(|a| a == "--setup") {
+        return setup::run();
+    }
     if args.get(1).is_some_and(|a| a == "--daemon") {
         DAEMON_START.store(true, Ordering::SeqCst);
+    }
+    // Premier lancement interactif (jamais en mode daemon, qui tourne
+    // sans surface) : on montre l'assistant au lieu du launcher.
+    if !DAEMON_START.load(Ordering::SeqCst) && setup::is_first_run() {
+        return setup::run();
     }
 
     let app = adw::Application::builder().application_id(APP_ID).build();

@@ -121,3 +121,55 @@ window.weft-window {
   color: alpha(@weft_fg, 0.75);
   opacity: 0.45;
 }
+
+/* ------------------------ assistant de premier lancement ------------ */
+.weft-setup-title {
+  font-size: 21px;
+  font-weight: 600;
+  color: @weft_fg;
+}
+
+.weft-setup-step {
+  padding: 12px 12px;
+  border-radius: 12px;
+  margin: 2px 0;
+}
+.weft-setup-step:hover {
+  background: alpha(white, 0.04);
+}
+
+.weft-setup-status {
+  font-size: 12.5px;
+  margin-right: 4px;
+}
+.weft-status-done {
+  color: #57c98a;   /* vert doux : étape satisfaite */
+}
+.weft-status-todo {
+  color: alpha(@weft_fg, 0.45);
+}
+
+.weft-setup-action {
+  background: alpha(white, 0.09);
+  color: @weft_fg;
+  border: none;
+  border-radius: 8px;
+  padding: 4px 14px;
+  min-height: 0;
+}
+.weft-setup-action:hover {
+  background: alpha(white, 0.15);
+}
+
+/* Bouton Terminer : seul point d'accent de l'assistant. */
+.weft-setup-primary {
+  background: @weft_accent;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 22px;
+  font-weight: 500;
+}
+.weft-setup-primary:hover {
+  background: shade(@weft_accent, 1.1);
+}

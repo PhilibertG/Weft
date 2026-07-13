@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Weft
+Comment=Launcher unifié : apps, jeux et programmes Windows
+Exec=/usr/bin/weft-launcher
+Icon=system-search
+Terminal=false
+Categories=Utility;
+Keywords=launcher;search;lanceur;spotlight;
