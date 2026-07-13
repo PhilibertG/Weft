@@ -1,13 +1,15 @@
 # Service utilisateur systemd : démarre le daemon Weft à l'ouverture de
-# session graphique. Installer dans ~/.config/systemd/user/ puis :
-#   systemctl --user daemon-reload && systemctl --user enable --now weft-launcher
+# session graphique. Posé par le paquet .deb dans
+# /usr/lib/systemd/user/ ; activé par l'assistant de premier lancement
+# (systemctl --user enable --now weft-launcher), jamais par le postinst
+# root (qui n'a pas à toucher la session utilisateur).
 [Unit]
 Description=Weft launcher (daemon d'indexation résident)
 PartOf=graphical-session.target
 After=graphical-session.target
 
 [Service]
-ExecStart=%h/.cargo/bin/weft-launcher --daemon
+ExecStart=/usr/bin/weft-launcher --daemon
 Restart=on-failure
 RestartSec=2
 

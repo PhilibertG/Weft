@@ -1,18 +1,7 @@
-# Handler double-clic des programmes Windows : ouvrir un .exe/.msi dans
-# Fichiers lance l'UI d'installation Weft. NoDisplay : ce n'est pas une
-# app à lister, juste un handler.
-# Installation (WEFT_BIN = chemin du binaire) :
-#   sed "s|@WEFT_BIN@|$HOME/.cargo/bin|" packaging/weft-installer.desktop \
-#     > ~/.local/share/applications/weft-installer.desktop
-#   update-desktop-database ~/.local/share/applications
-#   xdg-mime default weft-installer.desktop \
-#     application/vnd.microsoft.portable-executable \
-#     application/x-ms-dos-executable application/x-msdownload \
-#     application/x-msi
 [Desktop Entry]
 Type=Application
 Name=Installer avec Weft
 NoDisplay=true
-Exec=@WEFT_BIN@/weft-installer %f
+Exec=/usr/bin/weft-installer %f
 Icon=system-software-install
 MimeType=application/vnd.microsoft.portable-executable;application/x-ms-dos-executable;application/x-msdownload;application/x-msi;

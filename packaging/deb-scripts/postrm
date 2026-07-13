@@ -1,0 +1,16 @@
+#!/bin/sh
+# postrm du paquet weft — nettoyage système après retrait, idempotent.
+# Le service --user et le raccourci de l'utilisateur ne sont pas touchés
+# ici (posés par l'assistant, dans son home) ; un daemon encore en vie
+# s'éteindra à la déconnexion.
+set -e
+
+case "$1" in
+    remove|purge)
+        if command -v update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database -q /usr/share/applications 2>/dev/null || true
+        fi
+        ;;
+esac
+
+exit 0

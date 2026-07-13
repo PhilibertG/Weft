@@ -3,3 +3,6 @@
 # Notes locales, hors repo public
 ARCHITECTURE.md
 Prompt.md
+
+# artefacts cargo-deb
+target/debian/

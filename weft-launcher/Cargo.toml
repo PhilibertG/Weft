@@ -3,9 +3,42 @@ name = "weft-launcher"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
+description = "Launcher unifié Weft : apps natives, Flatpak, Steam, GOG, Epic et programmes Windows dans une seule liste."
 
 [dependencies]
 weft-core = { path = "../weft-core" }
 gtk = { package = "gtk4", version = "0.9", features = ["v4_14"] }
 adw = { package = "libadwaita", version = "0.7", features = ["v1_5"] }
 notify = "8.2.0"
+
+# ---------------------------------------------------------------------------
+# Paquet .deb (cargo deb -p weft-launcher --no-build après cargo build --release)
+# weft-launcher est le paquet "chef" : il embarque les trois binaires et les
+# fichiers système. Ce que le postinst root peut légitimement poser ; le reste
+# (service user, raccourci) est du ressort de l'assistant de premier lancement.
+# ---------------------------------------------------------------------------
+[package.metadata.deb]
+name = "weft"
+maintainer = "Philibert G <philibert.jules.ferry@gmail.com>"
+copyright = "2026, Philibert G"
+license-file = ["../LICENSE", "0"]
+extended-description = """\
+Weft réunit apps Linux natives, Flatpak, jeux Steam/GOG/Epic et programmes \
+Windows (via umu/Proton) dans un launcher unique façon Spotlight, sans jamais \
+montrer l'origine d'une application."""
+section = "utils"
+priority = "optional"
+depends = "libgtk-4-1, libadwaita-1-0, python3, curl, tar"
+recommends = "plocate, icoutils"
+# Chemins relatifs au dossier de ce Cargo.toml (weft-launcher/) : le
+# workspace et son target/ sont un cran au-dessus, d'où les ../
+assets = [
+    ["../target/release/weft-launcher",   "usr/bin/",                 "755"],
+    ["../target/release/weft-windows",    "usr/bin/",                 "755"],
+    ["../target/release/weft-installer",  "usr/bin/",                 "755"],
+    ["../packaging/weft-launcher.service", "usr/lib/systemd/user/",   "644"],
+    ["../packaging/apparmor-weft-umu",    "etc/apparmor.d/weft-umu",  "644"],
+    ["../packaging/weft-installer.desktop", "usr/share/applications/", "644"],
+    ["../README.md",                   "usr/share/doc/weft/README.md", "644"],
+]
+maintainer-scripts = "../packaging/deb-scripts"

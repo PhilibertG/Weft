@@ -1,0 +1,29 @@
+#!/bin/sh
+# postinst du paquet weft — niveau SYSTÈME uniquement, idempotent.
+# Il ne touche JAMAIS la session utilisateur (service --user, raccourci,
+# mimetypes par-utilisateur) : c'est le rôle de l'assistant de premier
+# lancement du launcher. Toutes les commandes dégradent proprement.
+set -e
+
+case "$1" in
+    configure)
+        # Recharge le profil AppArmor posé dans /etc/apparmor.d/ (autorise
+        # les user namespaces du conteneur umu). Non fatal si AppArmor est
+        # absent ou désactivé sur cette machine.
+        if command -v apparmor_parser >/dev/null 2>&1; then
+            apparmor_parser -r -T -W /etc/apparmor.d/weft-umu 2>/dev/null || true
+        fi
+
+        # Rend le handler .exe/.msi découvrable (le xdg-mime *default* par
+        # utilisateur reste à l'assistant).
+        if command -v update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database -q /usr/share/applications 2>/dev/null || true
+        fi
+
+        # Le manager système relit les unités : rend le service --user
+        # visible sans reconnexion.
+        systemctl daemon-reload 2>/dev/null || true
+        ;;
+esac
+
+exit 0
