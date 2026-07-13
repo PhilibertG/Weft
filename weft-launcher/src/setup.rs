@@ -312,24 +312,36 @@ fn dconf_read(path: &str) -> String {
         .unwrap_or_default()
 }
 
-/// Un raccourci Weft est-il déjà installé ? (idempotence : on repère notre
-/// commande, quel que soit l'index dconf)
-fn shortcut_installed() -> bool {
+const LAUNCHER_CMD: &str = "/usr/bin/weft-launcher";
+
+/// Le chemin dconf d'un raccourci Weft existant, s'il y en a un (repéré à
+/// sa commande, quel que soit l'index).
+fn weft_keybinding() -> Option<String> {
     existing_keybindings()
-        .iter()
-        .any(|path| dconf_read(&format!("{path}command")).contains("weft-launcher"))
+        .into_iter()
+        .find(|path| dconf_read(&format!("{path}command")).contains("weft-launcher"))
+}
+
+/// Installé ET correct : un raccourci Weft dont la commande pointe bien sur
+/// le binaire du paquet (un ancien raccourci vers ~/.cargo/bin compte comme
+/// « à réparer », pas comme installé).
+fn shortcut_installed() -> bool {
+    weft_keybinding()
+        .is_some_and(|p| dconf_read(&format!("{p}command")) == LAUNCHER_CMD)
 }
 
 fn install_shortcut() -> Result<(), String> {
-    let existing = existing_keybindings();
-
-    // Déjà là : ne rien refaire.
-    if existing
-        .iter()
-        .any(|p| dconf_read(&format!("{p}command")).contains("weft-launcher"))
-    {
+    // Un raccourci Weft existe déjà : on ne recrée rien, on répare sa
+    // commande si besoin (cas d'un ancien chemin ~/.cargo/bin) et on garde
+    // la combinaison choisie par l'utilisateur.
+    if let Some(path) = weft_keybinding() {
+        if dconf_read(&format!("{path}command")) != LAUNCHER_CMD {
+            dconf_write(&format!("{path}command"), &format!("'{LAUNCHER_CMD}'"))?;
+        }
         return Ok(());
     }
+
+    let existing = existing_keybindings();
 
     // Conflit : la combinaison est déjà prise par un AUTRE raccourci custom.
     if existing
@@ -364,7 +376,7 @@ fn install_shortcut() -> Result<(), String> {
 
     dconf_write(KEYBIND_ROOT, &list_literal)?;
     dconf_write(&format!("{new_path}name"), "'Weft'")?;
-    dconf_write(&format!("{new_path}command"), "'/usr/bin/weft-launcher'")?;
+    dconf_write(&format!("{new_path}command"), &format!("'{LAUNCHER_CMD}'"))?;
     dconf_write(&format!("{new_path}binding"), &format!("'{DEFAULT_SHORTCUT}'"))?;
     Ok(())
 }

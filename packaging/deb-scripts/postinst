@@ -20,6 +20,11 @@ case "$1" in
             update-desktop-database -q /usr/share/applications 2>/dev/null || true
         fi
 
+        # Rafraîchit le cache d'icônes pour que l'icône Weft apparaisse net.
+        if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+            gtk-update-icon-cache -q -f -t /usr/share/icons/hicolor 2>/dev/null || true
+        fi
+
         # Le manager système relit les unités : rend le service --user
         # visible sans reconnexion.
         systemctl daemon-reload 2>/dev/null || true

@@ -40,6 +40,7 @@ assets = [
     ["../packaging/apparmor-weft-umu",    "etc/apparmor.d/weft-umu",  "644"],
     ["../packaging/weft-installer.desktop", "usr/share/applications/", "644"],
     ["../packaging/weft.desktop",      "usr/share/applications/",   "644"],
+    ["../packaging/weft.svg",          "usr/share/icons/hicolor/scalable/apps/weft.svg", "644"],
     ["../README.md",                   "usr/share/doc/weft/README.md", "644"],
 ]
 maintainer-scripts = "../packaging/deb-scripts"
