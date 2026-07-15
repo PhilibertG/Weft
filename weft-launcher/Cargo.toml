@@ -1,6 +1,6 @@
 [package]
 name = "weft-launcher"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 license.workspace = true
 description = "Launcher unifié Weft : apps natives, Flatpak, Steam, GOG, Epic et programmes Windows dans une seule liste."

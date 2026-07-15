@@ -48,6 +48,7 @@ impl Provider for CalcProvider {
             subtitle: Some("Entrée pour copier".to_owned()),
             icon: Some(Icon::Named("accessories-calculator".to_owned())),
             action: Action::CopyText(value),
+            uninstall: None,
             tier: Tier::Answer,
             score: 1000,
         }]

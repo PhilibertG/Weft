@@ -39,6 +39,24 @@ pub enum Action {
     OpenPath(PathBuf),
 }
 
+/// Comment défaire l'installation d'une app. Volontairement limité aux
+/// sources où la désinstallation est SÛRE : pas de mot de passe root, pas
+/// de risque d'emporter des dépendances système. Les apps natives (apt,
+/// AppImage posé à la main…) n'ont pas d'entrée ici — elles ne sont pas
+/// désinstallables depuis le launcher, et c'est assumé.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UninstallSpec {
+    /// App Windows installée par Weft : suppression totale du préfixe isolé
+    /// (slug dans le store). Le plus net — tout nous appartient.
+    WeftWindows(String),
+    /// Application Flatpak (identifiant, ex. `org.gimp.GIMP`) :
+    /// `flatpak uninstall`, sans root pour les installs utilisateur.
+    Flatpak(String),
+    /// Jeu Steam : on ouvre le dialogue de désinstallation du client
+    /// (`steam://uninstall/<appid>`) — Steam gère, jamais silencieux.
+    Steam(u32),
+}
+
 #[derive(Debug, Clone)]
 pub struct ResultItem {
     /// Unique au sein du provider (frecency, dédup d'affichage).
@@ -47,6 +65,10 @@ pub struct ResultItem {
     pub subtitle: Option<String>,
     pub icon: Option<Icon>,
     pub action: Action,
+    /// Désinstallation possible (et sûre) de ce résultat, si applicable.
+    /// `None` pour tout ce qui n'est pas une app désinstallable proprement
+    /// (calc, fichiers, apps natives…).
+    pub uninstall: Option<UninstallSpec>,
     pub tier: Tier,
     /// 0..=1000, comparé uniquement entre items de même tier.
     pub score: u32,
@@ -180,5 +202,18 @@ impl Registry {
             p.record_activation(&hit.item.id);
         }
         Ok(outcome)
+    }
+
+    /// Désinstalle le résultat s'il est désinstallable. Erreur explicite si
+    /// le résultat n'expose aucune méthode sûre (jamais présenté comme tel
+    /// par l'UI, mais on refuse proprement plutôt que d'échouer en silence).
+    pub fn uninstall(&mut self, hit: &Hit) -> io::Result<()> {
+        match &hit.item.uninstall {
+            Some(spec) => crate::launch::uninstall(spec),
+            None => Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "cette app ne se désinstalle pas depuis Weft",
+            )),
+        }
     }
 }

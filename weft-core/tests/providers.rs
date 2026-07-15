@@ -44,6 +44,7 @@ impl Provider for FakeAnswerProvider {
             subtitle: None,
             icon: None,
             action: Action::CopyText("42".into()),
+            uninstall: None,
             tier: Tier::Answer,
             // Score volontairement bas : le tier doit suffire à le mettre
             // devant les apps, c'est exactement ce qu'on teste.

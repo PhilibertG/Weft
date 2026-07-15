@@ -11,4 +11,6 @@ pub mod windows;
 pub use config::Config;
 pub use index::Index;
 pub use model::{AppEntry, Icon, LaunchSpec, Source};
-pub use provider::{Action, Activation, Hit, Provider, Registry, ResultItem, Tier, WatchSpec};
+pub use provider::{
+    Action, Activation, Hit, Provider, Registry, ResultItem, Tier, UninstallSpec, WatchSpec,
+};

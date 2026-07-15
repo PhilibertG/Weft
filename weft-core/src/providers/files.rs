@@ -105,6 +105,7 @@ fn to_item(path: &Path, query: &str) -> Option<ResultItem> {
         // le cœur n'a pas à connaître les thèmes d'icônes.
         icon: path.is_dir().then(|| Icon::Named("folder".to_owned())),
         action: Action::OpenPath(path.to_path_buf()),
+        uninstall: None,
         tier: Tier::Fallback,
         score,
     })

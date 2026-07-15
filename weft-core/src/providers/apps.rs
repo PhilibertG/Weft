@@ -3,8 +3,8 @@
 //! pas du cœur).
 
 use crate::index::Index;
-use crate::model::AppEntry;
-use crate::provider::{Action, Provider, ResultItem, Tier, WatchSpec};
+use crate::model::{AppEntry, LaunchSpec, Source};
+use crate::provider::{Action, Provider, ResultItem, Tier, UninstallSpec, WatchSpec};
 use crate::providers::usage::UsageStore;
 use crate::search::Searcher;
 use crate::sources::{desktop, steam};
@@ -44,6 +44,7 @@ impl AppProvider {
             subtitle: entry.description.clone(),
             icon: entry.icon.clone(),
             action: Action::Launch(entry.launch.clone()),
+            uninstall: uninstall_spec(entry),
             tier: Tier::Primary,
             // Le score nucleo n'est pas borné : on écrête sur l'échelle
             // commune. Suffisant tant que le tri fin reste intra-provider.
@@ -114,4 +115,34 @@ impl Provider for AppProvider {
         }
         specs
     }
+}
+
+/// Méthode de désinstallation SÛRE pour cette app, ou `None` si aucune
+/// (apps natives apt, AppImage posé à la main… — non désinstallables ici).
+fn uninstall_spec(entry: &AppEntry) -> Option<UninstallSpec> {
+    // App Windows Weft : reconnue à son id (un raccourci Wine arbitraire est
+    // aussi Source::Wine mais n'est pas des nôtres — on n'y touche pas).
+    if let Some(slug) = entry.id.strip_prefix("weft-windows:") {
+        return Some(UninstallSpec::WeftWindows(slug.to_owned()));
+    }
+    // Steam : le client gère (dialogue), qu'on vienne d'un manifest ou d'un
+    // raccourci .desktop — l'appid suffit.
+    if let LaunchSpec::SteamApp(app_id) = entry.launch {
+        return Some(UninstallSpec::Steam(app_id));
+    }
+    // Flatpak : l'identifiant vit dans l'Exec `flatpak run [options] <id>`.
+    if entry.source == Source::Flatpak {
+        if let LaunchSpec::Exec(argv) = &entry.launch {
+            return flatpak_app_id(argv).map(UninstallSpec::Flatpak);
+        }
+    }
+    None
+}
+
+/// Extrait l'identifiant d'app d'un argv `flatpak run [--opts] <app-id> …` :
+/// premier token après `run` qui n'est pas une option.
+fn flatpak_app_id(argv: &[String]) -> Option<String> {
+    let mut it = argv.iter();
+    it.by_ref().find(|a| a.as_str() == "run")?;
+    it.find(|a| !a.starts_with('-')).cloned()
 }
