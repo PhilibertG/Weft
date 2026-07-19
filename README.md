@@ -12,13 +12,21 @@ invisible : c'est la *couture invisible*.
 
 ## Le concept
 
-Weft est la première brique d'un projet plus large : un desktop Linux où
-l'utilisateur lance une application sans jamais savoir — ni se soucier de —
-si elle est native, conteneurisée ou Windows. La stratégie est « briques
-d'abord, OS ensuite » : chaque composant s'installe et se teste sur un Linux
-existant, l'assemblage en image système viendra après.
+Sur un bureau Linux, chaque écosystème se trahit : les jeux Windows passent
+par un client, les apps Wine hurlent leur origine, chaque monde a son
+gestionnaire, sa friction, son jargon. Weft fait disparaître ces coutures
+sur le bureau que vous avez déjà : une application se cherche, se lance,
+s'installe et se désinstalle de la même façon, qu'elle soit native,
+Flatpak, Steam, GOG, Epic ou un simple `.exe`, sans que sa provenance
+n'apparaisse jamais.
 
-Aujourd'hui, Weft fournit deux briques fonctionnelles :
+Le projet est né avec l'ambition d'un OS complet ; l'expérience a tranché
+autrement : la couture invisible n'a pas besoin de remplacer votre
+environnement, elle fonctionne dedans. Weft est donc un outil qui
+s'installe en un paquet sur votre distribution, pas un système qui vous
+demande de déménager.
+
+Weft fournit deux composants :
 
 - **Le launcher unifié** — un overlay façon Spotlight, invoqué au clavier,
   qui indexe toutes vos applications quelle que soit leur origine. La source
@@ -43,7 +51,11 @@ Aujourd'hui, Weft fournit deux briques fonctionnelles :
   résultat
 - Recherche de fichiers (via `plocate`), toujours sous les applications —
   un fichier obscur ne masque jamais une app évidente
-- Navigation 100 % clavier : flèches, Entrée, Échap
+- Navigation 100 % clavier : flèches, Entrée, Échap, <kbd>Ctrl</kbd>+<kbd>Suppr</kbd>
+- Désinstallation sans quitter le launcher : <kbd>Ctrl</kbd>+<kbd>Suppr</kbd> sur
+  la ligne sélectionnée, confirmation au clavier, l'app disparaît de la liste.
+  Limitée aux sources où la suppression est sûre et sans mot de passe (voir
+  [Utilisation](#utilisation)) — les paquets système ne sont pas concernés
 - Process résident : apparition en ~20 ms, index reconstruit automatiquement
   quand vous installez ou supprimez une app (apt, Flatpak, Steam, Windows)
 
@@ -139,6 +151,28 @@ Invoquez le launcher avec votre raccourci, tapez, Entrée. C'est tout.
 | `2 inches en cm` | `= 5.08 cm` |
 | `rapport` | vos fichiers, sous les applications |
 
+### Désinstaller une application
+
+Sélectionnez-la et pressez <kbd>Ctrl</kbd>+<kbd>Suppr</kbd> : une barre de
+confirmation apparaît, <kbd>Entrée</kbd> valide, <kbd>Échap</kbd> annule.
+L'indice `⌦ désinstaller` sur la ligne sélectionnée signale les applications
+éligibles.
+
+| Origine de l'app | Ce que fait Weft |
+|---|---|
+| Programme Windows installé par Weft | supprime l'application et son environnement isolé |
+| Application Flatpak | `flatpak uninstall` |
+| Jeu Steam | ouvre le dialogue de désinstallation du client Steam |
+| Paquet système (apt), AppImage… | **non pris en charge** |
+
+> [!NOTE]
+> Seules les origines désinstallables proprement et **sans droits root** sont
+> proposées. Une application installée par apt — Blender, VS Code… — n'est pas
+> désinstallable depuis Weft : passez par votre gestionnaire de paquets. Ce
+> n'est pas une limite technique mais un choix : retirer un paquet système
+> peut en emporter d'autres, ça ne se fait pas derrière une confirmation d'une
+> seconde.
+
 Le monde Windows se pilote aussi en CLI :
 
 ```bash
@@ -207,16 +241,30 @@ chaque étape étant ensuite validée sur machine réelle.
 
 ## Feuille de route
 
-- [x] **Brique 1 — launcher unifié** : sources natives/Flatpak/Steam/Wine,
-  fuzzy + frecency, calc, fichiers, daemon, config
-- [x] **Brique 2 (2.1, 2.2) — monde Windows** : moteur umu/Proton épinglé,
-  préfixes isolés, install par double-clic, icônes
-- [x] **Brique 2 (2.3) — GOG et Epic sans leurs launchers** : bibliothèques,
-  installation et lancement via legendary/lgogdownloader, correctifs
-  protonfixes par-jeu résolus automatiquement
-- [ ] **Brique 3** : cohérence visuelle cross-monde (theming unifié)
-- [ ] **Brique 4** : environnement de bureau
-- [ ] **Brique 5** : assemblage en image système bootable
+Fait :
+
+- [x] **Launcher unifié** : sources natives/Flatpak/Steam/Wine, fuzzy +
+  frecency, calc, fichiers, daemon, config, désinstallation, style
+- [x] **Monde Windows** : moteur umu/Proton épinglé, préfixes isolés,
+  install par double-clic, icônes
+- [x] **GOG et Epic sans leurs launchers** : bibliothèques, installation et
+  lancement via legendary/lgogdownloader, correctifs protonfixes par-jeu
+- [x] **Distribution** : paquet `.deb` en release, assistant de premier
+  lancement
+
+En cours / à venir :
+
+- [ ] **Échecs connus** : détecter avant installation les programmes
+  notoirement incompatibles (Office Click-to-Run, anticheat kernel…) et
+  afficher un message honnête avec des alternatives, plutôt que de laisser
+  l'installeur échouer de façon cryptique
+
+Pistes explorées puis écartées — le projet visait initialement un OS
+complet (environnement de bureau dédié, image système bootable) ; la
+conclusion de l'expérience est que la couture invisible fonctionne mieux
+en outil qui s'intègre au bureau existant qu'en système qui le remplace.
+Ces chantiers ne sont pas prévus mais si cela vient à vous manquez je tenterais
+l'aventure !
 
 > [!WARNING]
 > Projet personnel en développement actif, testé principalement sur
